@@ -50,10 +50,15 @@ class Api_Controller extends CI_Controller
 	protected function require_roles($roles)
 	{
 		if (!$this->auth_user) {
-			$this->api_response->error('UNAUTHORIZED', 'Authentication required.', 401);
+			$this->api_response->error('UNAUTHORIZED', 'Authentication required. Please login again.', 401);
 		}
 		if (!in_array($this->auth_user->role, (array) $roles, true)) {
-			$this->api_response->error('FORBIDDEN', 'You do not have permission for this action.', 403);
+			$this->api_response->error(
+				'FORBIDDEN',
+				'Your role (' . $this->auth_user->role . ') cannot perform this action. Allowed: ' . implode(', ', (array) $roles) . '.',
+				403,
+				array('role' => $this->auth_user->role, 'allowed' => array_values((array) $roles))
+			);
 		}
 	}
 
@@ -69,10 +74,15 @@ class Api_Controller extends CI_Controller
 	protected function require_permission($permission_key)
 	{
 		if (!$this->auth_user) {
-			$this->api_response->error('UNAUTHORIZED', 'Authentication required.', 401);
+			$this->api_response->error('UNAUTHORIZED', 'Authentication required. Please login again.', 401);
 		}
 		if (!$this->has_permission($permission_key)) {
-			$this->api_response->error('FORBIDDEN', 'You do not have permission for this action.', 403);
+			$this->api_response->error(
+				'FORBIDDEN',
+				'Missing permission: ' . $permission_key . '. Ask admin to enable it under Access for role ' . $this->auth_user->role . '.',
+				403,
+				array('permission' => $permission_key, 'role' => $this->auth_user->role)
+			);
 		}
 	}
 

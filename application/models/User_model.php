@@ -89,8 +89,15 @@ class User_model extends CI_Model
 
 	public function create($data)
 	{
-		$this->db->insert('users', $data);
-		return $this->db->insert_id();
+		// Avoid inserting empty strings into nullable FKs
+		if (array_key_exists('company_id', $data) && ($data['company_id'] === '' || $data['company_id'] === 0)) {
+			$data['company_id'] = null;
+		}
+		$ok = $this->db->insert('users', $data);
+		if (!$ok) {
+			return 0;
+		}
+		return (int) $this->db->insert_id();
 	}
 
 	public function update_user($id, $data)

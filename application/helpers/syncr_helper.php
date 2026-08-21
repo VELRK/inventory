@@ -21,12 +21,25 @@ function request_value($key, $default = null)
 {
 	$ci =& get_instance();
 	$body = json_body();
-	if (array_key_exists($key, $body) && $body[$key] !== '') {
+	if (array_key_exists($key, $body) && $body[$key] !== '' && $body[$key] !== null) {
 		return $body[$key];
+	}
+	// Accept camelCase from mobile clients (companyId → company_id).
+	$camel = preg_replace_callback('/_([a-z])/', function ($m) {
+		return strtoupper($m[1]);
+	}, $key);
+	if ($camel !== $key && array_key_exists($camel, $body) && $body[$camel] !== '' && $body[$camel] !== null) {
+		return $body[$camel];
 	}
 	$post = $ci->input->post($key);
 	if ($post !== null && $post !== false && $post !== '') {
 		return $post;
+	}
+	if ($camel !== $key) {
+		$postCamel = $ci->input->post($camel);
+		if ($postCamel !== null && $postCamel !== false && $postCamel !== '') {
+			return $postCamel;
+		}
 	}
 	$get = $ci->input->get($key);
 	if ($get !== null && $get !== false && $get !== '') {
@@ -35,9 +48,43 @@ function request_value($key, $default = null)
 	return $default;
 }
 
+/** First non-empty value among keys (snake or camel). */
+function request_any($keys, $default = null)
+{
+	foreach ((array) $keys as $key) {
+		$val = request_value($key, null);
+		if ($val !== null && $val !== '') {
+			return $val;
+		}
+	}
+	return $default;
+}
+
 function now_dt()
 {
 	return date('Y-m-d H:i:s');
+}
+
+function db_error_message($fallback = 'Database error. Please try again.')
+{
+	$ci =& get_instance();
+	$err = $ci->db->error();
+	$code = isset($err['code']) ? (int) $err['code'] : 0;
+	$msg = isset($err['message']) ? trim((string) $err['message']) : '';
+	if ($code === 1062 || stripos($msg, 'Duplicate') !== false) {
+		return 'This record already exists (duplicate value).';
+	}
+	if ($code === 1452 || stripos($msg, 'foreign key') !== false) {
+		return 'Related record not found (invalid company or project id).';
+	}
+	if ($code === 1265 || stripos($msg, 'truncated') !== false || stripos($msg, 'Data truncated') !== false) {
+		return 'Invalid value for a field (check role/status).';
+	}
+	if ($msg !== '') {
+		// Keep short for mobile UI
+		return strlen($msg) > 180 ? substr($msg, 0, 177) . '…' : $msg;
+	}
+	return $fallback;
 }
 
 function format_inr($amount)

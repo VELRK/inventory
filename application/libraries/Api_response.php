@@ -28,6 +28,7 @@ class Api_response
 	{
 		$payload = array(
 			'success' => false,
+			'message' => $message,
 			'error' => array(
 				'code' => $code_key,
 				'message' => $message
@@ -35,13 +36,23 @@ class Api_response
 		);
 		if ($details !== null) {
 			$payload['error']['details'] = $details;
+			$payload['details'] = $details;
 		}
 		$this->_send($payload, $http);
 	}
 
 	public function validation($errors)
 	{
-		$this->error('VALIDATION_ERROR', 'Please correct the highlighted fields.', 422, $errors);
+		$first = 'Please correct the highlighted fields.';
+		if (is_array($errors)) {
+			foreach ($errors as $msg) {
+				if (is_string($msg) && $msg !== '') {
+					$first = $msg;
+					break;
+				}
+			}
+		}
+		$this->error('VALIDATION_ERROR', $first, 422, $errors);
 	}
 
 	private function _send($payload, $http)

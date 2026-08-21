@@ -97,7 +97,7 @@ export default function Reports() {
   return (
     <div>
       <div className="toolbar">
-        <h1 className="page-title" style={{ marginRight: 'auto' }}>Bookings & Registrations</h1>
+        <h1 className="page-title" style={{ marginRight: 'auto' }}>Bookings</h1>
         {canBook && (type === 'bookings' || admin) && (
           <button className="btn btn-gold" onClick={openAdd}>+ Add {type === 'bookings' ? 'Booking' : 'Registration'}</button>
         )}

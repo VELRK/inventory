@@ -215,6 +215,92 @@ function media_url($path)
 }
 
 /**
+ * Save a PHP $_FILES entry under uploads/{folder}/.
+ * Returns relative path or false on error ($error set).
+ */
+function store_uploaded_file($file, $folder = 'projects', &$error = null)
+{
+	$error = null;
+	$folder = preg_replace('/[^a-z0-9_-]/i', '', strtolower((string) $folder));
+	if ($folder === '') {
+		$folder = 'projects';
+	}
+	if (!is_array($file) || !isset($file['error'])) {
+		$error = 'Please choose an image file to upload.';
+		return false;
+	}
+	$php_error = (int) $file['error'];
+	if ($php_error === UPLOAD_ERR_NO_FILE) {
+		$error = 'Please choose an image file to upload.';
+		return false;
+	}
+	if (in_array($php_error, array(UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE), true)) {
+		$error = 'The file is too large. Maximum size is 4 MB.';
+		return false;
+	}
+	if ($php_error !== UPLOAD_ERR_OK) {
+		$error = 'Upload failed (PHP error ' . $php_error . ').';
+		return false;
+	}
+	$size = isset($file['size']) ? (int) $file['size'] : 0;
+	if ($size <= 0) {
+		$error = 'The selected file is empty.';
+		return false;
+	}
+	if ($size > 4194304) {
+		$error = 'The file is too large. Maximum size is 4 MB.';
+		return false;
+	}
+	$ext = strtolower(pathinfo(isset($file['name']) ? $file['name'] : '', PATHINFO_EXTENSION));
+	$allowed_ext = array('jpg' => true, 'jpeg' => true, 'png' => true, 'webp' => true);
+	if ($ext === '' || !isset($allowed_ext[$ext])) {
+		$error = 'Invalid file type. Upload a JPG, PNG, or WEBP image.';
+		return false;
+	}
+	if ($ext === 'jpeg') {
+		$ext = 'jpg';
+	}
+	$tmp = isset($file['tmp_name']) ? $file['tmp_name'] : '';
+	if ($tmp === '' || !is_uploaded_file($tmp)) {
+		$error = 'Invalid upload temp file.';
+		return false;
+	}
+	$info = @getimagesize($tmp);
+	if ($info === false) {
+		$error = 'This file is not a valid image.';
+		return false;
+	}
+	$dir = FCPATH . 'uploads' . DIRECTORY_SEPARATOR . $folder . DIRECTORY_SEPARATOR;
+	if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+		$error = 'Upload folder could not be created: uploads/' . $folder;
+		return false;
+	}
+	$slug = function_exists('slugify_filename') ? slugify_filename(isset($file['name']) ? $file['name'] : 'cover') : 'cover';
+	$stored = $folder . '_' . $slug . '_' . date('YmdHis') . '_v1.' . $ext;
+	$dest = $dir . $stored;
+	if (!@move_uploaded_file($tmp, $dest)) {
+		$error = 'The image could not be saved on the server.';
+		return false;
+	}
+	@chmod($dest, 0644);
+	return 'uploads/' . $folder . '/' . $stored;
+}
+
+/**
+ * Pick first uploaded image from common field names.
+ */
+function request_uploaded_image($keys = null)
+{
+	$keys = $keys ? (array) $keys : array('cover_image', 'coverImage', 'file', 'image', 'photo', 'cover', 'avatar');
+	foreach ($keys as $key) {
+		if (!empty($_FILES[$key]) && isset($_FILES[$key]['error']) && (int) $_FILES[$key]['error'] !== UPLOAD_ERR_NO_FILE) {
+			return $_FILES[$key];
+		}
+	}
+	return null;
+}
+
+/**
  * Normalize an image field from API clients:
  * - empty → null
  * - uploads/... path → keep
@@ -246,11 +332,10 @@ function store_image_input($value, $folder = 'projects', &$error = null)
 		if (preg_match('#(/uploads/[a-z0-9_-]+/[^?\s]+)#i', $value, $m)) {
 			return ltrim($m[1], '/');
 		}
-		// External URL — store as-is only if short enough for VARCHAR(255).
 		if (strlen($value) <= 255) {
 			return $value;
 		}
-		$error = 'Image URL is too long. Upload the file via /api/upload instead.';
+		$error = 'Image URL is too long. Upload the image file with multipart form-data.';
 		return false;
 	}
 
@@ -264,13 +349,12 @@ function store_image_input($value, $folder = 'projects', &$error = null)
 	} elseif (preg_match('#^[A-Za-z0-9+/=\r\n]+$#', $value) && strlen($value) > 200) {
 		$raw = base64_decode($value, true);
 	} else {
-		// Unknown string that is not a path — do not store (avoids truncated base64 in DB).
-		$error = 'Invalid cover_image. Send uploads/... path from /api/upload, or a data:image/...;base64, payload.';
+		$error = 'Send the image as multipart file field "cover_image" (or "file"), not a path string.';
 		return false;
 	}
 
 	if ($raw === false || $raw === '') {
-		$error = 'Could not decode image base64. Re-upload a JPG, PNG, or WEBP (max 4 MB).';
+		$error = 'Could not decode image base64. Prefer multipart file upload.';
 		return false;
 	}
 	$max = 4 * 1024 * 1024;
@@ -288,7 +372,7 @@ function store_image_input($value, $folder = 'projects', &$error = null)
 		$mimeExt = array('image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp');
 		if (isset($mimeExt[$info['mime']])) {
 			$ext = $mimeExt[$info['mime']];
-		} elseif (!isset($mimeExt[$info['mime']])) {
+		} else {
 			$error = 'Unsupported image type (' . $info['mime'] . '). Use JPG, PNG, or WEBP.';
 			return false;
 		}

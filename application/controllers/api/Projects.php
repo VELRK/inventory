@@ -85,39 +85,7 @@ class Projects extends Api_Controller
 	private function _payload($project = null)
 	{
 		$body = json_body();
-		// Cover image is optional. Empty string clears; omitted keeps existing on update.
-		// Accepts: uploads/... path, /api/upload result, or data:image/...;base64,... (Flutter).
-		$cover = null;
-		$hasCover = array_key_exists('cover_image', $body)
-			|| array_key_exists('coverImage', $body)
-			|| array_key_exists('cover_image_base64', $body)
-			|| array_key_exists('coverImageBase64', $body);
-		if ($hasCover) {
-			$rawCover = '';
-			foreach (array('cover_image', 'coverImage', 'cover_image_base64', 'coverImageBase64') as $k) {
-				if (array_key_exists($k, $body) && $body[$k] !== null && $body[$k] !== '') {
-					$rawCover = (string) $body[$k];
-					break;
-				}
-			}
-			if ($rawCover === '') {
-				$cover = null;
-			} else {
-				$err = null;
-				$stored = store_image_input($rawCover, 'projects', $err);
-				if ($stored === false) {
-					$this->api_response->validation(array('cover_image' => $err ?: 'Invalid cover image.'));
-				}
-				$cover = $stored;
-			}
-		} else {
-			$existing = $project ? $project->cover_image : null;
-			// Drop broken base64 leftovers from older clients.
-			if ($existing && (stripos($existing, 'data:') === 0 || strlen($existing) > 240)) {
-				$existing = null;
-			}
-			$cover = $existing;
-		}
+		$cover = $this->_resolve_cover($project, $body);
 		return array(
 			'name' => trim((string) request_value('name', $project ? $project->name : '')),
 			'location' => trim((string) request_value('location', $project ? $project->location : '')),
@@ -131,5 +99,62 @@ class Projects extends Api_Controller
 			'cover_image' => $cover,
 			'status' => request_value('status', $project ? $project->status : 'active')
 		);
+	}
+
+	/**
+	 * Prefer real multipart file upload (Flutter / form-data).
+	 * Fallback: base64 data URI. Do not require a pre-uploaded path.
+	 */
+	private function _resolve_cover($project = null, $body = array())
+	{
+		$file = request_uploaded_image(array('cover_image', 'coverImage', 'file', 'image', 'photo', 'cover'));
+		if ($file) {
+			$err = null;
+			$stored = store_uploaded_file($file, 'projects', $err);
+			if ($stored === false) {
+				$this->api_response->validation(array('cover_image' => $err ?: 'Cover image upload failed.'));
+			}
+			return $stored;
+		}
+
+		$hasCover = array_key_exists('cover_image', $body)
+			|| array_key_exists('coverImage', $body)
+			|| array_key_exists('cover_image_base64', $body)
+			|| array_key_exists('coverImageBase64', $body)
+			|| (isset($_POST['cover_image']) && $_POST['cover_image'] !== '')
+			|| (isset($_POST['clear_cover_image']) && (string) $_POST['clear_cover_image'] === '1');
+
+		if (!$hasCover) {
+			$existing = $project ? $project->cover_image : null;
+			if ($existing && (stripos($existing, 'data:') === 0 || strlen($existing) > 240)) {
+				return null;
+			}
+			return $existing;
+		}
+
+		$rawCover = '';
+		foreach (array('cover_image', 'coverImage', 'cover_image_base64', 'coverImageBase64') as $k) {
+			if (array_key_exists($k, $body) && $body[$k] !== null && $body[$k] !== '') {
+				$rawCover = (string) $body[$k];
+				break;
+			}
+		}
+		if ($rawCover === '' && isset($_POST['cover_image'])) {
+			$rawCover = (string) $_POST['cover_image'];
+		}
+		if ($rawCover === '' || (isset($_POST['clear_cover_image']) && (string) $_POST['clear_cover_image'] === '1')) {
+			return null;
+		}
+		// Ignore clients re-posting a truncated data: URI already in DB.
+		if (stripos($rawCover, 'data:') === 0 && strlen($rawCover) < 500) {
+			$existing = $project ? $project->cover_image : null;
+			return ($existing && stripos($existing, 'data:') !== 0) ? $existing : null;
+		}
+		$err = null;
+		$stored = store_image_input($rawCover, 'projects', $err);
+		if ($stored === false) {
+			$this->api_response->validation(array('cover_image' => $err ?: 'Invalid cover image.'));
+		}
+		return $stored;
 	}
 }

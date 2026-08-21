@@ -47,8 +47,14 @@ class Settings extends Api_Controller
 
 	public function mail_test()
 	{
-		$to = request_value('to', $this->auth_user->email);
-		$ok = $this->mailer->notify_event('mail.test', $to, array());
-		$this->api_response->ok(array('queued_or_sent' => $ok), $ok ? 'Test mail processed. Check mail logs.' : 'Mail send failed.');
+		$to = trim((string) request_value('to', ''));
+		if ($to === '') {
+			$to = $this->auth_user->email;
+		}
+		$ok = $this->mailer->notify_event('mail.test', $to, array('name' => $this->auth_user->name));
+		$this->api_response->ok(
+			array('queued_or_sent' => $ok, 'to' => $to),
+			$ok ? 'Test mail processed for ' . $to . '. Check inbox / mail logs.' : 'Mail send failed for ' . $to . '.'
+		);
 	}
 }

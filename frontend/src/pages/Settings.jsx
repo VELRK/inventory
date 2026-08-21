@@ -53,8 +53,8 @@ export default function SettingsPage() {
   async function testMail() {
     setErr('');
     try {
-      const r = await api('/settings/mail-test', { method: 'POST', body: { to: values.mail_from_email || 'info@superfinelabels.in' } });
-      setMsg(r.message);
+      const r = await api('/settings/mail-test', { method: 'POST', body: {} });
+      setMsg(r.message || 'Test mail sent to your login email.');
       const s = await api('/settings');
       setMailLog(s.data.mail_log || []);
     } catch (ex) { setErr(ex.message); }
@@ -105,7 +105,7 @@ export default function SettingsPage() {
         </div>
         <div className="btn-row" style={{ marginTop: 14 }}>
           <button className="btn btn-gold" type="submit">Save SMTP</button>
-          <button className="btn btn-outline" type="button" onClick={testMail}>Send test mail</button>
+          <button className="btn btn-outline" type="button" onClick={testMail}>Send test mail to my email</button>
         </div>
       </form>
 

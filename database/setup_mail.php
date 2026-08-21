@@ -95,11 +95,15 @@ foreach ($templates as $t) {
 	$s = $mysqli->real_escape_string($subject);
 	$b = $mysqli->real_escape_string($body);
 	$p = $mysqli->real_escape_string($ph);
-	$exists = $mysqli->query("SELECT id, body FROM email_templates WHERE event_key='{$e}'")->fetch_assoc();
+	$exists = $mysqli->query("SELECT id, subject, body FROM email_templates WHERE event_key='{$e}'")->fetch_assoc();
 	if ($exists) {
-		if (in_array($event, array('user.created', 'auth.forgot'), true) && strpos($exists['body'], '{link}') === false) {
+		$fixLink = in_array($event, array('user.created', 'auth.forgot'), true) && strpos($exists['body'], '{link}') === false;
+		$fixStatus = $event === 'inventory.status' && (
+			stripos($exists['body'], '{status}') === false || stripos($exists['subject'], '{status}') === false
+		);
+		if ($fixLink || $fixStatus) {
 			$mysqli->query("UPDATE email_templates SET name='{$n}', subject='{$s}', body='{$b}', placeholders='{$p}', is_active=1, updated_at=NOW() WHERE event_key='{$e}'");
-			echo "updated template {$event} (password link)\n";
+			echo "updated template {$event}\n";
 		} else {
 			echo "template exists {$event}\n";
 		}

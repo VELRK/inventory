@@ -117,9 +117,13 @@ class Email_template_model extends CI_Model
 			$exists = $this->db->get_where('email_templates', array('event_key' => $row['event_key']))->row();
 			if ($exists) {
 				// Keep password-link templates in sync (invite + forgot must include {link}).
-				if (in_array($row['event_key'], array('user.created', 'auth.forgot'), true)
-					&& (!$exists->body || strpos($exists->body, '{link}') === false)
-				) {
+				$needsLink = in_array($row['event_key'], array('user.created', 'auth.forgot'), true)
+					&& (!$exists->body || strpos($exists->body, '{link}') === false);
+				// Inventory status must include {status} or the mail shows a blank line.
+				$needsStatus = $row['event_key'] === 'inventory.status'
+					&& (!$exists->body || stripos($exists->body, '{status}') === false
+						|| !$exists->subject || stripos($exists->subject, '{status}') === false);
+				if ($needsLink || $needsStatus) {
 					$this->db->where('id', (int) $exists->id)->update('email_templates', array(
 						'name' => $row['name'],
 						'subject' => $row['subject'],

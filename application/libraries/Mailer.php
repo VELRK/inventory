@@ -67,14 +67,26 @@ class Mailer
 		}
 
 		foreach ($context as $key => $value) {
-			$subject = str_replace('{' . $key . '}', (string) $value, $subject);
-			$tpl = str_replace('{' . $key . '}', (string) $value, $tpl);
+			$needle = '{' . $key . '}';
+			$repl = (string) $value;
+			$subject = str_ireplace($needle, $repl, $subject);
+			$tpl = str_ireplace($needle, $repl, $tpl);
 		}
 		// Always guarantee a clickable set/reset password URL is present.
 		if (!empty($context['link'])) {
 			$link = (string) $context['link'];
 			if (strpos($tpl, $link) === false) {
 				$tpl .= "\n\nSet / reset password link (valid " . (isset($context['expires']) ? $context['expires'] : '48 hours') . "):\n" . $link;
+			}
+		}
+		// Inventory status mail must never leave a blank "New status:" line.
+		if ($event === 'inventory.status' && !empty($context['status'])) {
+			$statusText = (string) $context['status'];
+			if (stripos($subject, $statusText) === false) {
+				$subject = rtrim($subject) . ' ' . $statusText;
+			}
+			if (stripos($tpl, $statusText) === false) {
+				$tpl = rtrim($tpl) . "\nNew status: " . $statusText;
 			}
 		}
 		return $this->send($to, $subject, $tpl, $event);

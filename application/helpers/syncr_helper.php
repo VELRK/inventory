@@ -126,8 +126,32 @@ function status_label($status)
 		'active' => 'Active',
 		'inactive' => 'Inactive'
 	);
-	$key = strtolower((string) $status);
+	$key = strtolower(trim((string) $status));
+	if ($key === '') {
+		return '';
+	}
 	return isset($map[$key]) ? $map[$key] : ucfirst(str_replace('_', ' ', $key));
+}
+
+/** Map raw/label status to inventory_units ENUM slug, or null if invalid. */
+function normalize_unit_status($status)
+{
+	$raw = strtolower(trim((string) $status));
+	$raw = str_replace(array('-', ' '), '_', $raw);
+	$aliases = array(
+		'available' => 'available',
+		'avail' => 'available',
+		'on_hold' => 'on_hold',
+		'hold' => 'on_hold',
+		'onhold' => 'on_hold',
+		'blocked' => 'on_hold', // legacy → on_hold
+		'booked' => 'booked',
+		'booking' => 'booked',
+		'registered' => 'registered',
+		'registration' => 'registered',
+		'sold' => 'registered'
+	);
+	return isset($aliases[$raw]) ? $aliases[$raw] : null;
 }
 
 function pagination_params($default_limit = 10)

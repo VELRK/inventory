@@ -71,13 +71,19 @@ class Inventory extends Api_Controller
 			$data['updated_at'] = now_dt();
 			$this->db->where('id', (int) $id)->update('inventory_units', $data);
 			$fresh = $this->inventory_model->find($id);
-			if ($old !== $fresh->status) {
-				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . status_label($old) . ' to ' . status_label($fresh->status), 'inventory_units', $id);
+			$newStatus = $data['status'];
+			if ($old !== $newStatus) {
+				$label = status_label($newStatus);
+				if ($label === '') {
+					$label = (string) $newStatus;
+				}
+				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . status_label($old) . ' to ' . $label, 'inventory_units', $id);
 				$admins = $this->db->where('role', 'promoter_admin')->where('status', 'active')->get('users')->result();
 				foreach ($admins as $admin) {
 					$this->mailer->notify_event('inventory.status', $admin->email, array(
 						'unit_no' => $fresh->unit_no,
-						'status' => status_label($fresh->status)
+						'status' => $label,
+						'status_label' => $label
 					));
 				}
 			}
@@ -130,9 +136,11 @@ class Inventory extends Api_Controller
 		if (!is_array($ids) || empty($ids)) {
 			$this->api_response->validation(array('ids' => 'Select at least one unit.'));
 		}
-		$allowed_status = array('available', 'on_hold', 'booked', 'registered');
-		if ($action === 'change_status' && !in_array($status, $allowed_status, true)) {
-			$this->api_response->validation(array('status' => 'Invalid status.'));
+		if ($action === 'change_status') {
+			$status = normalize_unit_status($status);
+			if ($status === null) {
+				$this->api_response->validation(array('status' => 'Status must be available, on_hold, booked, or registered.'));
+			}
 		}
 		$project_scope = $this->allowed_project_ids();
 		$updated = 0;
@@ -166,6 +174,16 @@ class Inventory extends Api_Controller
 		if (($pps === null || $pps === '') && $area > 0) {
 			$pps = round($price / $area, 2);
 		}
+		$fallbackStatus = $unit && $unit->status !== '' && $unit->status !== null
+			? $unit->status
+			: 'available';
+		$rawStatus = request_value('status', $fallbackStatus);
+		$normalized = normalize_unit_status($rawStatus);
+		if ($normalized === null) {
+			$this->api_response->validation(array(
+				'status' => 'Status must be available, on_hold, booked, or registered.'
+			));
+		}
 		return array(
 			'project_id' => (int) request_value('project_id', $unit ? $unit->project_id : 0),
 			'unit_no' => trim((string) request_value('unit_no', $unit ? $unit->unit_no : '')),
@@ -181,7 +199,7 @@ class Inventory extends Api_Controller
 			'is_corner' => request_value('is_corner', $unit ? $unit->is_corner : 0) ? 1 : 0,
 			'approval_details' => request_value('approval_details', $unit ? $unit->approval_details : null),
 			'remarks' => request_value('remarks', $unit ? $unit->remarks : null),
-			'status' => request_value('status', $unit ? $unit->status : 'available')
+			'status' => $normalized
 		);
 	}
 }

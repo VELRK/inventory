@@ -1,11 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, Boxes, Users, ClipboardList, FileBarChart,
-  Activity, Settings, Database, TerminalSquare, Bell, LogOut
+  Activity, Settings, Database, TerminalSquare, Bell, LogOut, KeyRound, Mail
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, clearSession, getUser, updateSessionUser } from '../api';
-import { ImageField, Modal } from './ui';
+import { Field, ImageField, Modal } from './ui';
 
 const adminNav = [
   ['/', 'Dashboard', LayoutDashboard],
@@ -17,6 +17,7 @@ const adminNav = [
   ['/reports', 'Bookings', FileBarChart],
   ['/activity', 'Activity', Activity],
   ['/settings', 'Settings', Settings],
+  ['/email-templates', 'Email templates', Mail],
   ['/schema', 'Schema Studio', Database],
   ['/api-tester', 'API Tester', TerminalSquare],
 ];
@@ -35,8 +36,11 @@ export default function Layout() {
   const [user, setUser] = useState(getUser());
   const [unread, setUnread] = useState(0);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [pwdOpen, setPwdOpen] = useState(false);
   const [photo, setPhoto] = useState({ avatar: '', avatar_url: '' });
+  const [pwd, setPwd] = useState({ current_password: '', new_password: '', new_password_confirm: '' });
   const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
   const items = user?.role === 'promoter_admin'
     ? adminNav
     : user?.role === 'marketing_team_admin'
@@ -70,6 +74,30 @@ export default function Layout() {
     }
   }
 
+  function openPassword() {
+    setErr('');
+    setMsg('');
+    setPwd({ current_password: '', new_password: '', new_password_confirm: '' });
+    setPwdOpen(true);
+  }
+
+  async function savePassword(e) {
+    e.preventDefault();
+    setErr('');
+    setMsg('');
+    if (pwd.new_password !== pwd.new_password_confirm) {
+      setErr('Passwords do not match.');
+      return;
+    }
+    try {
+      const r = await api('/auth/change-password', { method: 'POST', body: pwd });
+      setMsg(r.message || 'Password changed. Confirmation email sent.');
+      setPwd({ current_password: '', new_password: '', new_password_confirm: '' });
+    } catch (ex) {
+      setErr(ex.message);
+    }
+  }
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -87,8 +115,11 @@ export default function Layout() {
         ))}
         <div className="side-foot">
           Signed in as<br /><strong>{user?.name}</strong>
-          <div style={{ marginTop: 10 }}>
-            <button className="btn btn-outline" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={() => { clearSession(); nav('/login'); }}>
+          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            <button type="button" className="btn btn-outline" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={openPassword}>
+              <KeyRound size={14} /> Change password
+            </button>
+            <button type="button" className="btn btn-outline" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.3)' }} onClick={() => { clearSession(); nav('/login'); }}>
               <LogOut size={14} /> Logout
             </button>
           </div>
@@ -123,6 +154,25 @@ export default function Layout() {
               onClear={() => setPhoto({ avatar: '', avatar_url: '' })}
             />
             <button className="btn btn-gold">Save photo</button>
+          </form>
+        </Modal>
+      )}
+      {pwdOpen && (
+        <Modal title="Change password" onClose={() => setPwdOpen(false)}>
+          <p className="muted" style={{ marginTop: 0 }}>Works for admin, team admin, and team users. A confirmation email is sent after success.</p>
+          {err && <div className="alert alert-err">{err}</div>}
+          {msg && <div className="alert alert-ok">{msg}</div>}
+          <form onSubmit={savePassword} className="grid">
+            <Field label="Current password">
+              <input className="input" type="password" required value={pwd.current_password} onChange={(e) => setPwd({ ...pwd, current_password: e.target.value })} autoComplete="current-password" />
+            </Field>
+            <Field label="New password">
+              <input className="input" type="password" required minLength={6} value={pwd.new_password} onChange={(e) => setPwd({ ...pwd, new_password: e.target.value })} autoComplete="new-password" />
+            </Field>
+            <Field label="Confirm new password">
+              <input className="input" type="password" required minLength={6} value={pwd.new_password_confirm} onChange={(e) => setPwd({ ...pwd, new_password_confirm: e.target.value })} autoComplete="new-password" />
+            </Field>
+            <button className="btn btn-gold">Update password</button>
           </form>
         </Modal>
       )}

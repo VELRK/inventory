@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, setSession } from '../api';
 
 const demos = [
@@ -41,9 +41,12 @@ export default function Login() {
         <p className="muted">Sign in to the real estate inventory portal.</p>
         {err && <div className="alert alert-err">{err}</div>}
         <span className="label">Email</span>
-        <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+        <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="username" />
         <span className="label">Password</span>
-        <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <Link to="/forgot" style={{ fontSize: 13, color: 'var(--teal)', fontWeight: 600 }}>Forgot password?</Link>
+        </div>
         <div style={{ margin: '18px 0 10px' }}>
           <button className="btn btn-gold btn-block" disabled={loading}>{loading ? 'Signing in…' : 'Login'}</button>
         </div>

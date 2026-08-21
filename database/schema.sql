@@ -12,6 +12,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `schema_change_logs`;
 DROP TABLE IF EXISTS `mail_logs`;
+DROP TABLE IF EXISTS `email_templates`;
 DROP TABLE IF EXISTS `notifications`;
 DROP TABLE IF EXISTS `password_resets`;
 DROP TABLE IF EXISTS `api_tokens`;
@@ -305,6 +306,20 @@ CREATE TABLE `mail_logs` (
   `error_message` TEXT NULL,
   `created_at` DATETIME NOT NULL,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `email_templates` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `event_key` VARCHAR(80) NOT NULL,
+  `name` VARCHAR(120) NOT NULL,
+  `subject` VARCHAR(200) NOT NULL,
+  `body` TEXT NOT NULL,
+  `placeholders` VARCHAR(500) NULL,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_email_event` (`event_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `notifications` (

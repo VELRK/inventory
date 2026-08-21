@@ -57,6 +57,10 @@ $route['api/settings'] = 'api/settings/index';
 $route['api/settings/mail-test'] = 'api/settings/mail_test';
 $route['api/settings/credentials'] = 'api/settings/credentials';
 
+$route['api/email-templates'] = 'api/email_templates/index';
+$route['api/email-templates/(:num)'] = 'api/email_templates/item/$1';
+$route['api/email-templates/(:num)/reset'] = 'api/email_templates/reset/$1';
+
 $route['api/schema'] = 'api/schema_studio/full';
 $route['api/schema/full'] = 'api/schema_studio/full';
 $route['api/schema/tables'] = 'api/schema_studio/tables';

@@ -133,3 +133,40 @@ function slugify_filename($name)
 	}
 	return substr($base, 0, 40);
 }
+
+function frontend_app_url($path = '/')
+{
+	$ci =& get_instance();
+	$base = '';
+	if (isset($ci->setting_model)) {
+		$base = trim((string) $ci->setting_model->get('app_frontend_url', ''));
+	}
+	if ($base === '') {
+		$api = rtrim((string) base_url(), '/');
+		if (stripos($api, 'superfinelabels') !== false || stripos($api, '/plots') !== false) {
+			$base = 'https://superfinelabels.in/plots/app';
+		} else {
+			$base = 'http://localhost:5173/plots/app';
+		}
+	}
+	return rtrim($base, '/') . '/' . ltrim($path, '/');
+}
+
+/**
+ * Issue a one-time password set/reset token. Returns the raw token string.
+ */
+function create_password_reset_token($user_id, $ttl_seconds = 3600)
+{
+	$ci =& get_instance();
+	$ci->db->where('user_id', (int) $user_id)
+		->where('used_at IS NULL', null, false)
+		->update('password_resets', array('used_at' => now_dt()));
+	$token = bin2hex(random_bytes(24));
+	$ci->db->insert('password_resets', array(
+		'user_id' => (int) $user_id,
+		'token' => $token,
+		'expires_at' => date('Y-m-d H:i:s', time() + (int) $ttl_seconds),
+		'created_at' => now_dt()
+	));
+	return $token;
+}

@@ -30,9 +30,9 @@ class Email_template_model extends CI_Model
 			array(
 				'event_key' => 'user.created',
 				'name' => 'New user welcome',
-				'subject' => 'Welcome to Inventory',
-				'body' => "Hello {name},\n\nYour Inventory account is ready.\nEmail: {email}\n\nSign in and change your password after first login.",
-				'placeholders' => 'name, email'
+				'subject' => 'Set your Inventory password',
+				'body' => "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nClick this link to set your own password (valid {expires}):\n{link}\n\nAfter that, sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.",
+				'placeholders' => 'name, email, link, expires, token, login_link'
 			),
 			array(
 				'event_key' => 'request.submitted',
@@ -116,6 +116,15 @@ class Email_template_model extends CI_Model
 		foreach ($this->defaults() as $row) {
 			$exists = $this->db->get_where('email_templates', array('event_key' => $row['event_key']))->row();
 			if ($exists) {
+				// Upgrade old welcome text that lacked a set-password link.
+				if ($row['event_key'] === 'user.created' && $exists->body && strpos($exists->body, '{link}') === false) {
+					$this->db->where('id', (int) $exists->id)->update('email_templates', array(
+						'subject' => $row['subject'],
+						'body' => $row['body'],
+						'placeholders' => $row['placeholders'],
+						'updated_at' => now_dt()
+					));
+				}
 				continue;
 			}
 			$this->db->insert('email_templates', array(

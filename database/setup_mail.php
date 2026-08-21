@@ -77,7 +77,7 @@ $templates = array(
 	array('auth.forgot', 'Password reset request', 'Reset your Inventory password', "Hello {name},\n\nWe received a password reset request for your Inventory account.\n\nClick this link to set a new password (valid {expires}):\n{link}\n\nIf you did not request this, you can ignore this email.", 'name, link, expires, token'),
 	array('auth.reset_done', 'Password reset confirmation', 'Your Inventory password was reset', "Hello {name},\n\nYour password was changed successfully using the email reset link.\n\nSign in here:\n{login_link}\n\nIf you did not do this, contact your administrator immediately.", 'name, login_link'),
 	array('auth.password_changed', 'Password change confirmation', 'Your Inventory password was changed', "Hello {name},\n\nYour account password was changed from the Inventory portal.\n\nIf this was not you, reset your password from the login page immediately.", 'name'),
-	array('user.created', 'New user welcome', 'Welcome to Inventory', "Hello {name},\n\nYour Inventory account is ready.\nEmail: {email}\n\nSign in and change your password after first login.", 'name, email'),
+	array('user.created', 'New user welcome', 'Set your Inventory password', "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nClick this link to set your own password (valid {expires}):\n{link}\n\nAfter that, sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.", 'name, email, link, expires, token, login_link'),
 	array('request.submitted', 'Hold request submitted (admin)', 'New hold request · {unit_no}', "Hello,\n\nA hold request was submitted.\n\nUnit: {unit_no}\nProject: {project}\nCompany: {company}\n\nPlease review it in the Inventory portal.", 'unit_no, project, company'),
 	array('request.approved', 'Hold request approved', 'Hold request approved · {unit_no}', "Hello,\n\nYour hold request for unit {unit_no} was approved.\nYou can proceed to book the unit with the customer.", 'unit_no, notes'),
 	array('request.rejected', 'Hold request rejected', 'Hold request rejected · {unit_no}', "Hello,\n\nYour hold request for unit {unit_no} was rejected.\nNotes: {notes}", 'unit_no, notes'),
@@ -95,9 +95,14 @@ foreach ($templates as $t) {
 	$s = $mysqli->real_escape_string($subject);
 	$b = $mysqli->real_escape_string($body);
 	$p = $mysqli->real_escape_string($ph);
-	$exists = $mysqli->query("SELECT id FROM email_templates WHERE event_key='{$e}'")->fetch_assoc();
+	$exists = $mysqli->query("SELECT id, body FROM email_templates WHERE event_key='{$e}'")->fetch_assoc();
 	if ($exists) {
-		echo "template exists {$event}\n";
+		if ($event === 'user.created' && strpos($exists['body'], '{link}') === false) {
+			$mysqli->query("UPDATE email_templates SET name='{$n}', subject='{$s}', body='{$b}', placeholders='{$p}', updated_at=NOW() WHERE event_key='{$e}'");
+			echo "updated template {$event} (set-password link)\n";
+		} else {
+			echo "template exists {$event}\n";
+		}
 		continue;
 	}
 	$mysqli->query("INSERT INTO email_templates (event_key,name,subject,body,placeholders,is_active,created_at,updated_at) VALUES ('{$e}','{$n}','{$s}','{$b}','{$p}',1,NOW(),NOW())");

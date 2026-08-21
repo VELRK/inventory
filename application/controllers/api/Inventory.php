@@ -57,9 +57,17 @@ class Inventory extends Api_Controller
 			$this->api_response->ok($this->inventory_model->decorate($unit));
 		}
 		if ($method === 'PUT' || $method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 			$old = $unit->status;
 			$data = $this->_payload($unit);
+			// Team admin cannot move a unit to a project outside their assignment.
+			if ($this->is_team_admin()) {
+				$allowed = $this->allowed_project_ids();
+				$new_project = (int) $data['project_id'];
+				if ($allowed !== null && !in_array($new_project, $allowed, true)) {
+					$this->api_response->error('FORBIDDEN', 'You cannot move this unit to an unassigned project.', 403);
+				}
+			}
 			$data['updated_at'] = now_dt();
 			$this->db->where('id', (int) $id)->update('inventory_units', $data);
 			$fresh = $this->inventory_model->find($id);
@@ -114,7 +122,7 @@ class Inventory extends Api_Controller
 
 	public function bulk()
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 		$ids = request_value('ids', array());
 		$action = request_value('action', 'change_status');
 		$status = request_value('status');
@@ -126,10 +134,14 @@ class Inventory extends Api_Controller
 		if ($action === 'change_status' && !in_array($status, $allowed_status, true)) {
 			$this->api_response->validation(array('status' => 'Invalid status.'));
 		}
+		$project_scope = $this->allowed_project_ids();
 		$updated = 0;
 		foreach ($ids as $id) {
 			$unit = $this->inventory_model->find($id);
 			if (!$unit) {
+				continue;
+			}
+			if ($project_scope !== null && !in_array((int) $unit->project_id, $project_scope, true)) {
 				continue;
 			}
 			$data = array('updated_at' => now_dt());

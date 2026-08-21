@@ -68,19 +68,8 @@ class Auth extends Api_Controller
 		}
 		$user = $this->user_model->find_by_email($email);
 		if ($user && $user->status === 'active') {
-			// Invalidate previous unused tokens
-			$this->db->where('user_id', $user->id)
-				->where('used_at IS NULL', null, false)
-				->update('password_resets', array('used_at' => now_dt()));
-
-			$token = bin2hex(random_bytes(24));
-			$this->db->insert('password_resets', array(
-				'user_id' => $user->id,
-				'token' => $token,
-				'expires_at' => date('Y-m-d H:i:s', time() + 3600),
-				'created_at' => now_dt()
-			));
-			$link = $this->_frontend_url('/reset?token=' . urlencode($token));
+			$token = create_password_reset_token($user->id, 3600);
+			$link = frontend_app_url('/reset?token=' . urlencode($token));
 			$this->mailer->notify_event('auth.forgot', $user->email, array(
 				'name' => $user->name,
 				'token' => $token,
@@ -131,7 +120,7 @@ class Auth extends Api_Controller
 
 		$this->mailer->notify_event('auth.reset_done', $user->email, array(
 			'name' => $user->name,
-			'login_link' => $this->_frontend_url('/login')
+			'login_link' => frontend_app_url('/login')
 		));
 		$this->log_activity('auth.reset', 'Password reset completed via email link', 'users', $user->id);
 		$this->api_response->ok(array(), 'Password updated. A confirmation email was sent. You can sign in now.');
@@ -163,19 +152,5 @@ class Auth extends Api_Controller
 		));
 		$this->log_activity('auth.change_password', 'Password changed from account settings', 'users', $this->user_id());
 		$this->api_response->ok(array(), 'Password changed. A confirmation email was sent.');
-	}
-
-	private function _frontend_url($path = '/')
-	{
-		$base = trim((string) $this->setting_model->get('app_frontend_url', ''));
-		if ($base === '') {
-			$api = rtrim((string) base_url(), '/');
-			if (stripos($api, 'superfinelabels') !== false || stripos($api, '/plots') !== false) {
-				$base = 'https://superfinelabels.in/plots/app';
-			} else {
-				$base = 'http://localhost:5173/plots/app';
-			}
-		}
-		return rtrim($base, '/') . '/' . ltrim($path, '/');
 	}
 }

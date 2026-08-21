@@ -11,8 +11,9 @@ export default function UsersPage() {
   const [companies, setCompanies] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: 'TeamUser@123', phone: '', role: 'marketing_team_user', company_id: me?.company_id || '', status: 'active', avatar: '', avatar_url: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'marketing_team_user', company_id: me?.company_id || '', status: 'active', avatar: '', avatar_url: '' });
   const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
 
   const load = (page = 1, lim = limit) => api(`/users?page=${page}&limit=${lim}`).then((r) => setData(r.data)).catch((e) => setErr(e.message));
   useEffect(() => {
@@ -22,7 +23,9 @@ export default function UsersPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ name: '', email: '', password: 'TeamUser@123', phone: '', role: 'marketing_team_user', company_id: me?.company_id || '', status: 'active', avatar: '', avatar_url: '' });
+    setForm({ name: '', email: '', password: '', phone: '', role: 'marketing_team_user', company_id: me?.company_id || '', status: 'active', avatar: '', avatar_url: '' });
+    setErr('');
+    setMsg('');
     setOpen(true);
   }
   function openEdit(u) {
@@ -38,11 +41,15 @@ export default function UsersPage() {
       avatar: u.avatar || '',
       avatar_url: u.avatar_url || '',
     });
+    setErr('');
+    setMsg('');
     setOpen(true);
   }
 
   async function save(e) {
     e.preventDefault();
+    setErr('');
+    setMsg('');
     try {
       const body = { ...form };
       if (!body.password) delete body.password;
@@ -50,9 +57,15 @@ export default function UsersPage() {
       if (editing) {
         const r = await api(`/users/${editing.id}`, { method: 'PUT', body });
         if (editing.id === me.id) updateSessionUser(r.data);
-      } else await api('/users', { method: 'POST', body });
-      setOpen(false);
-      load(editing ? data.page : 1);
+        setOpen(false);
+        load(data.page);
+      } else {
+        delete body.password;
+        const r = await api('/users', { method: 'POST', body });
+        setOpen(false);
+        setMsg(r.message || 'User created. Set-password link emailed.');
+        load(1);
+      }
     } catch (ex) { setErr(ex.message); }
   }
 
@@ -75,6 +88,7 @@ export default function UsersPage() {
         {canManage && <button className="btn btn-gold" onClick={openAdd}>+ Add User</button>}
       </div>
       {err && <div className="alert alert-err">{err}</div>}
+      {msg && <div className="alert alert-ok">{msg}</div>}
       {data.items.map((u) => (
         <div key={u.id} className="list-card">
           {u.avatar_url
@@ -96,10 +110,16 @@ export default function UsersPage() {
         <Modal title={editing ? 'Edit user' : 'Add user'} onClose={() => setOpen(false)}>
           <form onSubmit={save} className="grid">
             <Field label="Name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Email"><input className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!!editing} /></Field>
-            <Field label={editing ? 'New password (optional)' : 'Password'}>
-              <input className="input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            </Field>
+            <Field label="Email"><input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!!editing} /></Field>
+            {editing ? (
+              <Field label="New password (optional)">
+                <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
+              </Field>
+            ) : (
+              <p className="muted" style={{ margin: 0, gridColumn: '1 / -1' }}>
+                No password here — the user gets an email link to set their own password (valid 48 hours).
+              </p>
+            )}
             <Field label="Phone"><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <ImageField
               label="Profile photo"

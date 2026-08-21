@@ -13,7 +13,9 @@ const blankBook = {
 export default function Inventory() {
   const me = getUser();
   const admin = me?.role === 'promoter_admin';
-  const canBook = me?.role === 'promoter_admin' || me?.role === 'marketing_team_admin';
+  const teamAdmin = me?.role === 'marketing_team_admin';
+  const canEdit = admin || teamAdmin;
+  const canBook = admin || teamAdmin;
   const [params, setParams] = useSearchParams();
   const projectId = params.get('project_id') || '';
   const [projects, setProjects] = useState([]);
@@ -128,7 +130,7 @@ export default function Inventory() {
         </select>
         <input className="input search" placeholder="Unit no" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load(1)} />
         {admin && <button className="btn btn-gold" onClick={openAdd}>+ Add Unit</button>}
-        {admin && bulk.length > 0 && <button className="btn btn-outline" onClick={bulkUpdate}>Hold {bulk.length} units</button>}
+        {canEdit && bulk.length > 0 && <button className="btn btn-outline" onClick={bulkUpdate}>Hold {bulk.length} units</button>}
       </div>
       {err && <div className="alert alert-err">{err}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
@@ -146,7 +148,7 @@ export default function Inventory() {
       </div>
       {data.items.map((u) => (
         <div key={u.id} className="list-card">
-          {admin && <input type="checkbox" checked={bulk.includes(u.id)} onChange={(e) => setBulk(e.target.checked ? [...bulk, u.id] : bulk.filter((i) => i !== u.id))} />}
+          {canEdit && <input type="checkbox" checked={bulk.includes(u.id)} onChange={(e) => setBulk(e.target.checked ? [...bulk, u.id] : bulk.filter((i) => i !== u.id))} />}
           <div>
             <strong>{u.unit_no}</strong> · {u.project_name}
             <div className="unit-meta">{u.area_sqft} sq.ft · {u.facing} · {u.road_width_ft} ft road · {u.plot_type}</div>
@@ -155,7 +157,7 @@ export default function Inventory() {
           <div style={{ textAlign: 'right' }}>
             <Badge status={u.status} />
             <RowActions
-              onEdit={admin ? () => openEdit(u) : undefined}
+              onEdit={canEdit ? () => openEdit(u) : undefined}
               onDelete={admin ? () => remove(u) : undefined}
             >
               <button className="btn btn-ghost btn-sm" onClick={() => setDetail(u)}>View</button>
@@ -210,10 +212,10 @@ export default function Inventory() {
           <p className="muted">{detail.area_sqft} sq.ft · {detail.facing} · {detail.dimensions} · {detail.approval_details}</p>
           <p>{detail.remarks}</p>
           <div className="btn-row" style={{ marginTop: 12 }}>
-            {admin && (
+            {canEdit && (
               <>
                 <button className="btn btn-outline" onClick={() => { setDetail(null); openEdit(detail); }}>Edit</button>
-                <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>
+                {admin && <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>}
               </>
             )}
             {canBook && bookable && (
@@ -222,7 +224,7 @@ export default function Inventory() {
                 setBookOpen(true);
               }}>Book unit</button>
             )}
-            {!admin && detail.status === 'available' && (
+            {!canEdit && detail.status === 'available' && (
               <button className="btn btn-outline" onClick={() => setReqOpen(true)}>Request hold</button>
             )}
           </div>

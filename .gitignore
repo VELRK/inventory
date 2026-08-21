@@ -14,6 +14,7 @@ id_rsa
 id_ed25519
 /frontend/node_modules
 /frontend/dist
+/frontend/*.zip
 /app
 /_ci_tmp
 /ci3.zip

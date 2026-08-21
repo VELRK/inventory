@@ -146,29 +146,38 @@ class Api_Controller extends CI_Controller
 		if ($this->is_admin()) {
 			return null;
 		}
-		$ids = array();
+
+		$company_ids = array();
 		if ($this->company_id()) {
 			$rows = $this->db->select('project_id')
 				->from('company_project_assignments')
 				->where('company_id', $this->company_id())
 				->get()->result();
 			foreach ($rows as $row) {
-				$ids[] = (int) $row->project_id;
+				$company_ids[] = (int) $row->project_id;
 			}
 		}
-		if ($this->auth_user->role === 'marketing_team_user') {
-			$user_ids = array();
-			$rows = $this->db->select('project_id')
-				->from('user_project_assignments')
-				->where('user_id', $this->user_id())
-				->get()->result();
-			foreach ($rows as $row) {
-				$user_ids[] = (int) $row->project_id;
-			}
-			if (!empty($user_ids)) {
-				$ids = array_values(array_intersect($ids, $user_ids));
-			}
+
+		$user_ids = array();
+		$rows = $this->db->select('project_id')
+			->from('user_project_assignments')
+			->where('user_id', $this->user_id())
+			->get()->result();
+		foreach ($rows as $row) {
+			$user_ids[] = (int) $row->project_id;
 		}
-		return $ids;
+
+		// Team admin: company pool + any personally allocated projects.
+		if ($this->is_team_admin()) {
+			return array_values(array_unique(array_merge($company_ids, $user_ids)));
+		}
+
+		// Team user: prefer personally allocated projects (set on user create/edit).
+		if (!empty($user_ids)) {
+			return array_values(array_unique($user_ids));
+		}
+
+		// Fallback: all company projects if no personal allocation yet.
+		return array_values(array_unique($company_ids));
 	}
 }

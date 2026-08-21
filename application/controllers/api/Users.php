@@ -195,8 +195,12 @@ class Users extends Api_Controller
 				$data['password_hash'] = password_hash($password, PASSWORD_BCRYPT);
 			}
 			$this->user_model->update_user($id, $data);
-			if ($can_manage && request_value('project_ids') !== null) {
-				$this->user_model->set_projects($id, request_value('project_ids', array()));
+			if ($can_manage && (request_value('project_ids') !== null || request_value('projectIds') !== null)) {
+				$pids = request_any(array('project_ids', 'projectIds'), array());
+				if (!is_array($pids)) {
+					$pids = array();
+				}
+				$this->user_model->set_projects($id, $pids);
 			}
 			$this->log_activity('user.update', 'Updated user ' . $user->name, 'users', $id);
 			$this->api_response->ok($this->user_model->public_user($this->user_model->find($id)), 'User updated.');

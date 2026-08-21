@@ -107,13 +107,37 @@ class User_model extends CI_Model
 
 	public function set_projects($user_id, $project_ids)
 	{
-		$this->db->where('user_id', (int) $user_id)->delete('user_project_assignments');
-		foreach ((array) $project_ids as $pid) {
+		$user_id = (int) $user_id;
+		$this->db->where('user_id', $user_id)->delete('user_project_assignments');
+		$project_ids = array_values(array_unique(array_filter(array_map('intval', (array) $project_ids))));
+		foreach ($project_ids as $pid) {
+			if ($pid < 1) {
+				continue;
+			}
 			$this->db->insert('user_project_assignments', array(
-				'user_id' => (int) $user_id,
-				'project_id' => (int) $pid,
+				'user_id' => $user_id,
+				'project_id' => $pid,
 				'created_at' => now_dt()
 			));
+		}
+
+		// Keep company pool in sync so GET /projects works for the whole team.
+		$user = $this->find($user_id);
+		if ($user && $user->company_id) {
+			$company_id = (int) $user->company_id;
+			foreach ($project_ids as $pid) {
+				$exists = $this->db->get_where('company_project_assignments', array(
+					'company_id' => $company_id,
+					'project_id' => $pid
+				))->row();
+				if (!$exists) {
+					$this->db->insert('company_project_assignments', array(
+						'company_id' => $company_id,
+						'project_id' => $pid,
+						'created_at' => now_dt()
+					));
+				}
+			}
 		}
 	}
 }

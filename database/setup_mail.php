@@ -74,10 +74,10 @@ foreach ($settings as $s) {
 }
 
 $templates = array(
-	array('auth.forgot', 'Password reset request', 'Reset your Inventory password', "Hello {name},\n\nWe received a password reset request for your Inventory account.\n\nClick this link to set a new password (valid {expires}):\n{link}\n\nIf you did not request this, you can ignore this email.", 'name, link, expires, token'),
-	array('auth.reset_done', 'Password reset confirmation', 'Your Inventory password was reset', "Hello {name},\n\nYour password was changed successfully using the email reset link.\n\nSign in here:\n{login_link}\n\nIf you did not do this, contact your administrator immediately.", 'name, login_link'),
+	array('auth.forgot', 'Password reset request', 'Set your Inventory password', "Hello {name},\n\nUse this link to set or reset your Inventory password (valid {expires}):\n{link}\n\nLogin email: {email}\n\nSign in after setting the password:\n{login_link}\n\nIf you did not request this, you can ignore this email.", 'name, email, link, expires, token, login_link'),
+	array('auth.reset_done', 'Password reset confirmation', 'Your Inventory password was updated', "Hello {name},\n\nYour password was set successfully.\n\nSign in here:\n{login_link}\n\nIf you did not do this, contact your administrator immediately.", 'name, login_link'),
 	array('auth.password_changed', 'Password change confirmation', 'Your Inventory password was changed', "Hello {name},\n\nYour account password was changed from the Inventory portal.\n\nIf this was not you, reset your password from the login page immediately.", 'name'),
-	array('user.created', 'New user welcome', 'Set your Inventory password', "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nClick this link to set your own password (valid {expires}):\n{link}\n\nAfter that, sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.", 'name, email, link, expires, token, login_link'),
+	array('user.created', 'New user welcome', 'Set your Inventory password', "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nUse this link to set your password (valid {expires}):\n{link}\n\nThen sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.", 'name, email, link, expires, token, login_link'),
 	array('request.submitted', 'Hold request submitted (admin)', 'New hold request · {unit_no}', "Hello,\n\nA hold request was submitted.\n\nUnit: {unit_no}\nProject: {project}\nCompany: {company}\n\nPlease review it in the Inventory portal.", 'unit_no, project, company'),
 	array('request.approved', 'Hold request approved', 'Hold request approved · {unit_no}', "Hello,\n\nYour hold request for unit {unit_no} was approved.\nYou can proceed to book the unit with the customer.", 'unit_no, notes'),
 	array('request.rejected', 'Hold request rejected', 'Hold request rejected · {unit_no}', "Hello,\n\nYour hold request for unit {unit_no} was rejected.\nNotes: {notes}", 'unit_no, notes'),
@@ -97,9 +97,9 @@ foreach ($templates as $t) {
 	$p = $mysqli->real_escape_string($ph);
 	$exists = $mysqli->query("SELECT id, body FROM email_templates WHERE event_key='{$e}'")->fetch_assoc();
 	if ($exists) {
-		if ($event === 'user.created' && strpos($exists['body'], '{link}') === false) {
-			$mysqli->query("UPDATE email_templates SET name='{$n}', subject='{$s}', body='{$b}', placeholders='{$p}', updated_at=NOW() WHERE event_key='{$e}'");
-			echo "updated template {$event} (set-password link)\n";
+		if (in_array($event, array('user.created', 'auth.forgot'), true) && strpos($exists['body'], '{link}') === false) {
+			$mysqli->query("UPDATE email_templates SET name='{$n}', subject='{$s}', body='{$b}', placeholders='{$p}', is_active=1, updated_at=NOW() WHERE event_key='{$e}'");
+			echo "updated template {$event} (password link)\n";
 		} else {
 			echo "template exists {$event}\n";
 		}

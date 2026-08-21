@@ -109,7 +109,7 @@ export default function UsersPage() {
       {open && (
         <Modal title={editing ? 'Edit user' : 'Add user'} onClose={() => setOpen(false)}>
           <form onSubmit={save} className="grid">
-            <Field label="Name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Name"><input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email"><input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!!editing} /></Field>
             {editing ? (
               <Field label="New password (optional)">

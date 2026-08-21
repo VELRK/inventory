@@ -34,24 +34,34 @@ class Users extends Api_Controller
 				$this->api_response->error('DUPLICATE', 'Email already exists.', 409);
 			}
 			$company_id = $this->is_admin() ? request_value('company_id') : $this->company_id();
+			if ($company_id === '' || $company_id === null || (int) $company_id === 0) {
+				$company_id = null;
+			} else {
+				$company_id = (int) $company_id;
+			}
 			if ($this->is_team_admin()) {
 				$role = 'marketing_team_user';
+				$company_id = $this->company_id() ?: null;
 			}
 			if ($role === 'promoter_admin' && !$this->is_admin()) {
 				$this->api_response->error('FORBIDDEN', 'Cannot create promoter admin.', 403);
 			}
-			// No admin-chosen password: random hash until they set one via email link.
+			$phone = trim((string) request_value('phone', ''));
+			$avatar = trim((string) request_value('avatar', ''));
 			$id = $this->user_model->create(array(
-				'company_id' => $company_id ?: null,
+				'company_id' => $company_id,
 				'name' => $name,
 				'email' => $email,
 				'password_hash' => password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT),
-				'phone' => request_value('phone'),
-				'avatar' => request_value('avatar'),
+				'phone' => $phone !== '' ? $phone : null,
+				'avatar' => $avatar !== '' ? $avatar : null,
 				'role' => $role,
-				'status' => request_value('status', 'active'),
+				'status' => request_value('status', 'active') ?: 'active',
 				'created_at' => now_dt()
 			));
+			if (!$id) {
+				$this->api_response->error('CREATE_FAILED', 'Could not save user. Check required fields and try again.', 500);
+			}
 			$project_ids = request_value('project_ids', array());
 			if ($this->is_team_admin()) {
 				$allowed = $this->allowed_project_ids();
@@ -60,22 +70,16 @@ class Users extends Api_Controller
 			if ($project_ids) {
 				$this->user_model->set_projects($id, $project_ids);
 			}
-			$ttl = 48 * 3600;
-			$token = create_password_reset_token($id, $ttl);
-			$link = frontend_app_url('/reset?token=' . urlencode($token));
-			$mail_ok = $this->mailer->notify_event('user.created', $email, array(
-				'name' => $name,
-				'email' => $email,
-				'token' => $token,
-				'link' => $link,
-				'expires' => '48 hours',
-				'login_link' => frontend_app_url('/login')
-			));
+			$created = $this->user_model->find($id);
+			if (!$created) {
+				$this->api_response->error('CREATE_FAILED', 'User was not saved correctly.', 500);
+			}
+			$mail_ok = send_password_link_mail($created, 'invite', 48 * 3600);
 			$this->log_activity('user.create', 'Created user ' . $name . ' (set-password link emailed)', 'users', $id);
 			$msg = $mail_ok
 				? 'User created. A set-password link was sent to ' . $email . '.'
 				: 'User created, but the set-password email failed. Ask them to use Forgot password, or check mail logs.';
-			$this->api_response->ok($this->user_model->public_user($this->user_model->find($id)), $msg, 201);
+			$this->api_response->ok($this->user_model->public_user($created), $msg, 201);
 		}
 		$this->api_response->error('METHOD_NOT_ALLOWED', 'Unsupported method.', 405);
 	}

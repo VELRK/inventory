@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, getUser } from '../api';
+import { api, can, getUser, mediaPreview } from '../api';
 import { Field, Modal, Pager, RowActions, confirmDelete, ImageField } from '../components/ui';
 
 const blank = { name: '', city: '', location: '', project_type: 'Residential Plot', approval_details: '', description: '', status: 'active', cover_image: '', cover_image_url: '' };
 
 export default function Projects() {
-  const admin = getUser()?.role === 'promoter_admin';
+  const me = getUser();
+  const canManage = can('projects.manage', me);
   const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1, limit: 10 });
   const [limit, setLimit] = useState(10);
   const [q, setQ] = useState('');
@@ -62,13 +63,13 @@ export default function Projects() {
       <div className="toolbar">
         <h1 className="page-title" style={{ marginRight: 'auto' }}>Projects</h1>
         <input className="input search" placeholder="Search projects" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load(1)} />
-        {admin && <button className="btn btn-gold" onClick={openAdd}>+ Add Project</button>}
+        {canManage && <button className="btn btn-gold" onClick={openAdd}>+ Add Project</button>}
       </div>
       {err && <div className="alert alert-err">{err}</div>}
       {data.items.map((p) => (
         <div key={p.id} className="list-card">
-          {p.cover_image_url || p.cover_image
-            ? <img className="thumb" src={p.cover_image_url || p.cover_image} alt="" />
+          {p.cover_image || p.cover_image_url
+            ? <img className="thumb" src={mediaPreview(p.cover_image, p.cover_image_url)} alt="" />
             : <div className="thumb" />}
           <div>
             <strong>{p.name}</strong>
@@ -78,7 +79,7 @@ export default function Projects() {
           </div>
           <div style={{ textAlign: 'right' }}>
             <span className="badge b-available">{p.counts.available} Available</span>
-            {admin && <RowActions onEdit={() => openEdit(p)} onDelete={() => remove(p)} />}
+            {canManage && <RowActions onEdit={() => openEdit(p)} onDelete={() => remove(p)} />}
           </div>
         </div>
       ))}

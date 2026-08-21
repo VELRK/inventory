@@ -13,7 +13,13 @@ class Uploads extends Api_Controller
 		if (!in_array($folder, $allowed_folders, true)) {
 			$this->api_response->error('VALIDATION_ERROR', 'Invalid upload folder. Use projects, users, or units.', 422, array('folder' => 'Invalid folder.'));
 		}
-		if ($folder !== 'users') {
+		if ($folder === 'users') {
+			// Profile photos: any logged-in user can upload to their flow.
+		} elseif ($folder === 'projects') {
+			$this->require_permission('projects.manage');
+		} elseif ($folder === 'units') {
+			$this->require_permission('inventory.edit');
+		} else {
 			$this->require_roles(array('promoter_admin'));
 		}
 

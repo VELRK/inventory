@@ -68,14 +68,7 @@ class Auth extends Api_Controller
 		}
 		$user = $this->user_model->find_by_email($email);
 		if ($user && $user->status === 'active') {
-			$token = create_password_reset_token($user->id, 3600);
-			$link = frontend_app_url('/reset?token=' . urlencode($token));
-			$this->mailer->notify_event('auth.forgot', $user->email, array(
-				'name' => $user->name,
-				'token' => $token,
-				'link' => $link,
-				'expires' => '60 minutes'
-			));
+			send_password_link_mail($user, 'forgot', 48 * 3600);
 			$this->log_activity('auth.forgot', 'Password reset email requested for ' . $user->email, 'users', $user->id);
 		}
 		$this->api_response->ok(array(), 'If that email is registered, a password reset link has been sent. Check your inbox.');

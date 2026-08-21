@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { IMAGE_HINT, fileUrl, uploadImage } from '../api';
+import { IMAGE_HINT, mediaPreview, uploadImage } from '../api';
 
 export function Badge({ status }) {
   const key = String(status || '').toLowerCase();
@@ -114,7 +114,7 @@ export function confirmDelete(label) {
 export function ImageField({ label, folder, path, url, onUploaded, onClear }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const preview = url || fileUrl(path);
+  const preview = mediaPreview(path, url);
 
   async function onFile(e) {
     const file = e.target.files?.[0];
@@ -124,7 +124,12 @@ export function ImageField({ label, folder, path, url, onUploaded, onClear }) {
     setErr('');
     try {
       const r = await uploadImage(file, folder);
-      onUploaded?.(r.data);
+      const data = r.data || {};
+      onUploaded?.({
+        ...data,
+        // Always keep a working public URL for the UI
+        url: mediaPreview(data.path, data.url) || data.url,
+      });
     } catch (ex) {
       setErr(ex.message);
     } finally {

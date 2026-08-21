@@ -2,10 +2,26 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 
+function readToken(params) {
+  let token = params.get('token') || '';
+  if (!token && typeof window !== 'undefined') {
+    // Some mail clients break query strings; also try hash ?token=
+    const hash = window.location.hash || '';
+    const m = hash.match(/token=([^&]+)/i);
+    if (m) token = decodeURIComponent(m[1]);
+  }
+  try {
+    token = decodeURIComponent(token.trim());
+  } catch {
+    token = token.trim();
+  }
+  return token;
+}
+
 export default function ResetPassword() {
   const [params] = useSearchParams();
   const nav = useNavigate();
-  const token = useMemo(() => params.get('token') || '', [params]);
+  const token = useMemo(() => readToken(params), [params]);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [err, setErr] = useState('');
@@ -17,7 +33,7 @@ export default function ResetPassword() {
     setErr('');
     setMsg('');
     if (!token) {
-      setErr('Reset link is missing or invalid. Request a new one.');
+      setErr('Password link is missing or invalid. Request a new one from Forgot password.');
       return;
     }
     if (password.length < 6) {
@@ -34,7 +50,7 @@ export default function ResetPassword() {
         method: 'POST',
         body: { token, password, password_confirm: confirm },
       });
-      setMsg(res.message || 'Password updated. A confirmation email was sent.');
+      setMsg(res.message || 'Password saved. You can sign in now.');
       setTimeout(() => nav('/login'), 1600);
     } catch (ex) {
       setErr(ex.message);
@@ -50,9 +66,9 @@ export default function ResetPassword() {
           <div className="logo-mark">S</div>
           <div className="brand-name">SYNCR</div>
         </div>
-        <h1>Set new password</h1>
-        <p className="muted">Choose a new password for your account. A confirmation email is sent after success.</p>
-        {!token && <div className="alert alert-err">This page needs a valid reset link from your email.</div>}
+        <h1>Set your password</h1>
+        <p className="muted">Same link is used for new users and password reset. Choose a password, then sign in.</p>
+        {!token && <div className="alert alert-err">This page needs a valid link from your email.</div>}
         {err && <div className="alert alert-err">{err}</div>}
         {msg && <div className="alert alert-ok">{msg}</div>}
         <span className="label">New password</span>
@@ -77,7 +93,7 @@ export default function ResetPassword() {
         />
         <div style={{ margin: '18px 0 10px' }}>
           <button className="btn btn-gold btn-block" disabled={loading || !token}>
-            {loading ? 'Saving…' : 'Update password'}
+            {loading ? 'Saving…' : 'Save password'}
           </button>
         </div>
         <p className="muted" style={{ fontSize: 13, textAlign: 'center' }}>

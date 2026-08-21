@@ -9,15 +9,15 @@ class Email_template_model extends CI_Model
 			array(
 				'event_key' => 'auth.forgot',
 				'name' => 'Password reset request',
-				'subject' => 'Reset your Inventory password',
-				'body' => "Hello {name},\n\nWe received a password reset request for your Inventory account.\n\nClick this link to set a new password (valid {expires}):\n{link}\n\nIf you did not request this, you can ignore this email.",
-				'placeholders' => 'name, link, expires, token'
+				'subject' => 'Set your Inventory password',
+				'body' => "Hello {name},\n\nUse this link to set or reset your Inventory password (valid {expires}):\n{link}\n\nLogin email: {email}\n\nSign in after setting the password:\n{login_link}\n\nIf you did not request this, you can ignore this email.",
+				'placeholders' => 'name, email, link, expires, token, login_link'
 			),
 			array(
 				'event_key' => 'auth.reset_done',
 				'name' => 'Password reset confirmation',
-				'subject' => 'Your Inventory password was reset',
-				'body' => "Hello {name},\n\nYour password was changed successfully using the email reset link.\n\nSign in here:\n{login_link}\n\nIf you did not do this, contact your administrator immediately.",
+				'subject' => 'Your Inventory password was updated',
+				'body' => "Hello {name},\n\nYour password was set successfully.\n\nSign in here:\n{login_link}\n\nIf you did not do this, contact your administrator immediately.",
 				'placeholders' => 'name, login_link'
 			),
 			array(
@@ -31,7 +31,7 @@ class Email_template_model extends CI_Model
 				'event_key' => 'user.created',
 				'name' => 'New user welcome',
 				'subject' => 'Set your Inventory password',
-				'body' => "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nClick this link to set your own password (valid {expires}):\n{link}\n\nAfter that, sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.",
+				'body' => "Hello {name},\n\nYour Inventory account was created.\nLogin email: {email}\n\nUse this link to set your password (valid {expires}):\n{link}\n\nThen sign in here:\n{login_link}\n\nIf you did not expect this email, contact your administrator.",
 				'placeholders' => 'name, email, link, expires, token, login_link'
 			),
 			array(
@@ -116,12 +116,16 @@ class Email_template_model extends CI_Model
 		foreach ($this->defaults() as $row) {
 			$exists = $this->db->get_where('email_templates', array('event_key' => $row['event_key']))->row();
 			if ($exists) {
-				// Upgrade old welcome text that lacked a set-password link.
-				if ($row['event_key'] === 'user.created' && $exists->body && strpos($exists->body, '{link}') === false) {
+				// Keep password-link templates in sync (invite + forgot must include {link}).
+				if (in_array($row['event_key'], array('user.created', 'auth.forgot'), true)
+					&& (!$exists->body || strpos($exists->body, '{link}') === false)
+				) {
 					$this->db->where('id', (int) $exists->id)->update('email_templates', array(
+						'name' => $row['name'],
 						'subject' => $row['subject'],
 						'body' => $row['body'],
 						'placeholders' => $row['placeholders'],
+						'is_active' => 1,
 						'updated_at' => now_dt()
 					));
 				}

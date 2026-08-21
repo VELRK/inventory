@@ -94,8 +94,31 @@ export function validateImageFile(file) {
 
 export function fileUrl(path) {
   if (!path) return '';
-  if (/^https?:\/\//i.test(path)) return path;
-  return `/plots/${String(path).replace(/^\//, '')}`;
+  const raw = String(path);
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      // API sometimes returns localhost URLs — map to public /plots/uploads/...
+      if (/localhost|127\.0\.0\.1/i.test(u.hostname)) {
+        const idx = u.pathname.indexOf('/uploads/');
+        if (idx !== -1) return `/plots${u.pathname.slice(idx)}`;
+      }
+      // Already on production host
+      return raw;
+    } catch {
+      return raw;
+    }
+  }
+  const clean = raw.replace(/^\//, '');
+  if (clean.startsWith('plots/')) return `/${clean}`;
+  return `/plots/${clean}`;
+}
+
+/** Prefer stored path; rewrite bad absolute URLs from API. */
+export function mediaPreview(path, url) {
+  if (path) return fileUrl(path);
+  if (url) return fileUrl(url);
+  return '';
 }
 
 export async function uploadImage(file, folder) {

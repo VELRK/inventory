@@ -70,6 +70,13 @@ class Mailer
 			$subject = str_replace('{' . $key . '}', (string) $value, $subject);
 			$tpl = str_replace('{' . $key . '}', (string) $value, $tpl);
 		}
+		// Always guarantee a clickable set/reset password URL is present.
+		if (!empty($context['link'])) {
+			$link = (string) $context['link'];
+			if (strpos($tpl, $link) === false) {
+				$tpl .= "\n\nSet / reset password link (valid " . (isset($context['expires']) ? $context['expires'] : '48 hours') . "):\n" . $link;
+			}
+		}
 		return $this->send($to, $subject, $tpl, $event);
 	}
 

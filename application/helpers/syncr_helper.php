@@ -119,7 +119,36 @@ function media_url($path)
 	if (preg_match('#^https?://#i', $path)) {
 		return $path;
 	}
-	return rtrim(base_url(), '/') . '/' . ltrim($path, '/');
+	return rtrim(public_base_url(), '/') . '/' . ltrim($path, '/');
+}
+
+/**
+ * Public site root for media links (never localhost on Hostinger).
+ */
+function public_base_url()
+{
+	$host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+	if ($host !== '' && stripos($host, 'superfinelabels') !== false) {
+		return 'https://superfinelabels.in/plots';
+	}
+	$configured = rtrim((string) base_url(), '/');
+	if ($configured !== '' && stripos($configured, 'localhost') === false && stripos($configured, '127.0.0.1') === false) {
+		return $configured;
+	}
+	if ($host !== '') {
+		$https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+			|| (isset($_SERVER['SERVER_PORT']) && (string) $_SERVER['SERVER_PORT'] === '443')
+			|| (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+		$scheme = $https ? 'https' : 'http';
+		// Local XAMPP default app folder
+		$script = isset($_SERVER['SCRIPT_NAME']) ? str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])) : '';
+		$script = rtrim(str_replace('/index.php', '', $script), '/');
+		if ($script === '' || $script === '/') {
+			$script = '/inventory';
+		}
+		return $scheme . '://' . $host . $script;
+	}
+	return $configured !== '' ? $configured : 'http://localhost:8080/inventory';
 }
 
 function slugify_filename($name)
@@ -141,21 +170,28 @@ function frontend_app_url($path = '/')
 	if (isset($ci->setting_model)) {
 		$base = trim((string) $ci->setting_model->get('app_frontend_url', ''));
 	}
-	if ($base === '') {
-		$api = rtrim((string) base_url(), '/');
-		if (stripos($api, 'superfinelabels') !== false || stripos($api, '/plots') !== false) {
+	if ($base === '' || stripos($base, 'localhost') !== false) {
+		$host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : '';
+		if ($host !== '' && stripos($host, 'superfinelabels') !== false) {
+			$base = 'https://superfinelabels.in/plots/app';
+		} elseif (stripos((string) base_url(), 'superfinelabels') !== false || stripos((string) base_url(), '/plots') !== false) {
 			$base = 'https://superfinelabels.in/plots/app';
 		} else {
 			$base = 'http://localhost:5173/plots/app';
 		}
 	}
-	return rtrim($base, '/') . '/' . ltrim($path, '/');
+	// Normalize …/plots/app/reset (no double slash; keep query string)
+	$path = (string) $path;
+	if ($path !== '' && $path[0] !== '/') {
+		$path = '/' . $path;
+	}
+	return rtrim($base, '/') . $path;
 }
 
 /**
  * Issue a one-time password set/reset token. Returns the raw token string.
  */
-function create_password_reset_token($user_id, $ttl_seconds = 3600)
+function create_password_reset_token($user_id, $ttl_seconds = 172800)
 {
 	$ci =& get_instance();
 	$ci->db->where('user_id', (int) $user_id)
@@ -169,4 +205,36 @@ function create_password_reset_token($user_id, $ttl_seconds = 3600)
 		'created_at' => now_dt()
 	));
 	return $token;
+}
+
+/**
+ * Same flow for new-user invite and forgot-password: email a /reset?token= link.
+ * $kind = 'invite' | 'forgot'
+ */
+function send_password_link_mail($user, $kind = 'forgot', $ttl_seconds = 172800)
+{
+	$ci =& get_instance();
+	if (!$user || empty($user->email)) {
+		return false;
+	}
+	$token = create_password_reset_token($user->id, $ttl_seconds);
+	$link = frontend_app_url('/reset?token=' . rawurlencode($token));
+	$expires = ((int) $ttl_seconds >= 86400)
+		? (round($ttl_seconds / 86400) . ' days')
+		: (round($ttl_seconds / 3600) . ' hours');
+	$context = array(
+		'name' => $user->name ?: 'there',
+		'email' => $user->email,
+		'token' => $token,
+		'link' => $link,
+		'expires' => $expires,
+		'login_link' => frontend_app_url('/login')
+	);
+	$event = ($kind === 'invite') ? 'user.created' : 'auth.forgot';
+	$ok = $ci->mailer->notify_event($event, $user->email, $context);
+	// If invite template missing/inactive, fall back to the same reset template.
+	if (!$ok && $kind === 'invite') {
+		$ok = $ci->mailer->notify_event('auth.forgot', $user->email, $context);
+	}
+	return $ok;
 }

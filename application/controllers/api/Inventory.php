@@ -99,7 +99,7 @@ class Inventory extends Api_Controller
 				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . $prevLabel . ' to ' . $label, 'inventory_units', $id);
 				// Available: notify everyone with project access (all companies).
 				if ($newStatus === 'available' && $old !== 'available') {
-					$this->mailer->dispatch_event('inventory.available', $ctx);
+					$this->inventory_model->notify_available($fresh, $old);
 				} else {
 					// Other status changes → promoter admin (template recipients).
 					$this->mailer->dispatch_event('inventory.status', $ctx);
@@ -172,12 +172,37 @@ class Inventory extends Api_Controller
 			}
 			$data = array('updated_at' => now_dt());
 			if ($action === 'change_status') {
+				$old = $unit->status;
 				$data['status'] = $status;
+				$this->db->where('id', (int) $id)->update('inventory_units', $data);
+				if ($status === 'available' && $old !== 'available') {
+					$unit->status = $status;
+					$this->inventory_model->notify_available($unit, $old);
+				} elseif ($old !== $status) {
+					$project = $this->db->get_where('projects', array('id' => $unit->project_id))->row();
+					$this->mailer->dispatch_event('inventory.status', array(
+						'projectName' => $project ? $project->name : '',
+						'siteNumber' => $unit->unit_no,
+						'unit_no' => $unit->unit_no,
+						'previousStatus' => status_label($old),
+						'currentStatus' => status_label($status),
+						'status' => status_label($status),
+						'superAdminName' => $this->auth_user ? $this->auth_user->name : 'Super Admin',
+						'updatedDate' => date('d M Y, h:i A'),
+						'link' => frontend_app_url('/inventory?project_id=' . (int) $unit->project_id),
+						'project_id' => (int) $unit->project_id,
+						'actor_user_id' => $this->user_id()
+					));
+				}
+			} else {
+				if ($remarks !== null && $remarks !== '') {
+					$data['remarks'] = $remarks;
+				}
+				$this->db->where('id', (int) $id)->update('inventory_units', $data);
 			}
-			if ($remarks !== null && $remarks !== '') {
-				$data['remarks'] = $remarks;
+			if ($action === 'change_status' && $remarks !== null && $remarks !== '') {
+				$this->db->where('id', (int) $id)->update('inventory_units', array('remarks' => $remarks, 'updated_at' => now_dt()));
 			}
-			$this->db->where('id', (int) $id)->update('inventory_units', $data);
 			$this->log_activity('inventory.bulk', $unit->unit_no . ' bulk updated to ' . status_label($status), 'inventory_units', $id);
 			$updated++;
 		}

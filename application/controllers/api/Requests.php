@@ -214,23 +214,7 @@ class Requests extends Api_Controller
 		if ($requester) {
 			$this->notify($requester->id, 'Block request ' . $decision, 'Unit ' . $siteNumber . ' was ' . $decision);
 		}
-		// When reject restores Available, also notify all companies with project access.
-		if ($decision === 'rejected' && $unit) {
-			$this->mailer->dispatch_event('inventory.available', array(
-				'projectName' => $projectName,
-				'siteNumber' => $siteNumber,
-				'unit_no' => $siteNumber,
-				'previousStatus' => 'On Hold',
-				'currentStatus' => 'Available',
-				'status' => 'Available',
-				'superAdminName' => $superName,
-				'updatedDate' => date('d M Y, h:i A'),
-				'link' => frontend_app_url('/inventory?project_id=' . (int) $unit->project_id),
-				'project_id' => (int) $unit->project_id,
-				'company_id' => (int) $row->company_id,
-				'actor_user_id' => $this->user_id()
-			));
-		}
+		// When reject restores Available, set_status() already sends inventory.available.
 		$this->log_activity('request.review', 'Request #' . $id . ' ' . $decision, 'block_requests', $id);
 		$this->api_response->ok($this->request_model->decorate($this->request_model->find($id)), 'Request ' . $decision . '.');
 	}

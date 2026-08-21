@@ -91,11 +91,49 @@ class Inventory_model extends CI_Model
 		return $out;
 	}
 
-	public function set_status($id, $status)
+	public function set_status($id, $status, $notify = true)
 	{
+		$unit = $this->find($id);
+		if (!$unit) {
+			return false;
+		}
+		$old = $unit->status;
+		$status = (string) $status;
 		$this->db->where('id', (int) $id)->update('inventory_units', array(
 			'status' => $status,
 			'updated_at' => now_dt()
+		));
+		// Doc rule: non-Available → Available notifies everyone with project access.
+		if ($notify && $status === 'available' && $old !== 'available') {
+			$this->notify_available($unit, $old);
+		}
+		return true;
+	}
+
+	public function notify_available($unit, $previous_status = '')
+	{
+		if (!$unit) {
+			return false;
+		}
+		$ci =& get_instance();
+		if (empty($ci->mailer)) {
+			$ci->load->library('mailer');
+		}
+		$project = $this->db->get_where('projects', array('id' => $unit->project_id))->row();
+		$actor = !empty($ci->auth_user) ? $ci->auth_user : null;
+		$prev = $previous_status !== '' ? status_label($previous_status) : '';
+		return $ci->mailer->dispatch_event('inventory.available', array(
+			'projectName' => $project ? $project->name : '',
+			'siteNumber' => $unit->unit_no,
+			'unit_no' => $unit->unit_no,
+			'previousStatus' => $prev !== '' ? $prev : 'Previous',
+			'currentStatus' => 'Available',
+			'status' => 'Available',
+			'superAdminName' => $actor ? $actor->name : 'Super Admin',
+			'updatedDate' => date('d M Y, h:i A'),
+			'link' => frontend_app_url('/inventory?project_id=' . (int) $unit->project_id),
+			'project_id' => (int) $unit->project_id,
+			'actor_user_id' => $actor ? (int) $actor->id : 0
 		));
 	}
 }

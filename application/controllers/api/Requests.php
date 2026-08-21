@@ -69,12 +69,16 @@ class Requests extends Api_Controller
 			$admins = $this->db->where('role', 'promoter_admin')->where('status', 'active')->get('users')->result();
 			$company = $this->db->get_where('marketing_companies', array('id' => $this->company_id()))->row();
 			$project = $this->db->get_where('projects', array('id' => $unit->project_id))->row();
+			$this->mailer->dispatch_event('request.submitted', array(
+				'unit_no' => $unit->unit_no,
+				'project' => $project ? $project->name : '',
+				'company' => $company ? $company->name : '',
+				'company_id' => $this->company_id(),
+				'project_id' => (int) $unit->project_id,
+				'target_user_id' => $this->user_id(),
+				'actor_user_id' => $this->user_id()
+			));
 			foreach ($admins as $admin) {
-				$this->mailer->notify_event('request.submitted', $admin->email, array(
-					'unit_no' => $unit->unit_no,
-					'project' => $project ? $project->name : '',
-					'company' => $company ? $company->name : ''
-				));
 				$this->notify($admin->id, 'New block request', $unit->unit_no . ' requested by ' . ($company ? $company->name : 'team'));
 			}
 			$this->log_activity('request.create', 'Block request submitted for ' . $unit->unit_no, 'block_requests', $id);
@@ -167,9 +171,14 @@ class Requests extends Api_Controller
 		$requester = $this->user_model->find($row->requested_by);
 		if ($requester) {
 			$event = $decision === 'approved' ? 'request.approved' : 'request.rejected';
-			$this->mailer->notify_event($event, $requester->email, array(
+			$this->mailer->dispatch_event($event, array(
 				'unit_no' => $unit ? $unit->unit_no : '',
-				'notes' => (string) request_value('review_notes')
+				'notes' => (string) request_value('review_notes'),
+				'target_email' => $requester->email,
+				'target_user_id' => (int) $requester->id,
+				'company_id' => (int) $row->company_id,
+				'project_id' => $unit ? (int) $unit->project_id : 0,
+				'actor_user_id' => $this->user_id()
 			));
 			$this->notify($requester->id, 'Block request ' . $decision, 'Unit ' . ($unit ? $unit->unit_no : '') . ' was ' . $decision);
 		}

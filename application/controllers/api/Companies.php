@@ -46,7 +46,12 @@ class Companies extends Api_Controller
 			if ($project_ids) {
 				$this->company_model->set_projects($id, $project_ids);
 			}
-			$this->mailer->notify_event('company.created', $email, array('name' => $name));
+			$this->mailer->dispatch_event('company.created', array(
+				'name' => $name,
+				'target_email' => $email,
+				'company_id' => (int) $id,
+				'actor_user_id' => $this->user_id()
+			));
 			$this->log_activity('company.create', 'Created marketing company ' . $name, 'marketing_companies', $id);
 			$this->api_response->ok($this->company_model->decorate($this->company_model->find($id)), 'Company created.', 201);
 		}

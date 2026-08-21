@@ -78,14 +78,13 @@ class Inventory extends Api_Controller
 					$label = (string) $newStatus;
 				}
 				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . status_label($old) . ' to ' . $label, 'inventory_units', $id);
-				$admins = $this->db->where('role', 'promoter_admin')->where('status', 'active')->get('users')->result();
-				foreach ($admins as $admin) {
-					$this->mailer->notify_event('inventory.status', $admin->email, array(
-						'unit_no' => $fresh->unit_no,
-						'status' => $label,
-						'status_label' => $label
-					));
-				}
+				$this->mailer->dispatch_event('inventory.status', array(
+					'unit_no' => $fresh->unit_no,
+					'status' => $label,
+					'status_label' => $label,
+					'project_id' => (int) $fresh->project_id,
+					'actor_user_id' => $this->user_id()
+				));
 			}
 			$this->api_response->ok($this->inventory_model->decorate($fresh), 'Unit updated.');
 		}

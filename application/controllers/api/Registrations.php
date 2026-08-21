@@ -50,10 +50,12 @@ class Registrations extends Api_Controller
 			));
 			$id = $this->db->insert_id();
 			$this->inventory_model->set_status($unit_id, 'registered');
-			$to = $this->setting_model->get('mail_from_email');
-			$this->mailer->notify_event('registration.created', $to, array(
+			$this->mailer->dispatch_event('registration.created', array(
 				'customer' => $name,
-				'unit_no' => $unit->unit_no
+				'unit_no' => $unit->unit_no,
+				'company_id' => $this->company_id(),
+				'project_id' => (int) $unit->project_id,
+				'actor_user_id' => $this->user_id()
 			));
 			$this->log_activity('registration.create', 'Registration created for ' . $unit->unit_no, 'registrations', $id);
 			$this->api_response->ok($this->registration_model->decorate($this->registration_model->find($id)), 'Registration created.', 201);

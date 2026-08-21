@@ -60,12 +60,13 @@ class Bookings extends Api_Controller
 			));
 			$id = $this->db->insert_id();
 			$this->inventory_model->set_status($unit_id, 'booked');
-			$company = $company_id ? $this->db->get_where('marketing_companies', array('id' => $company_id))->row() : null;
-			$to = $company ? $company->email : $this->setting_model->get('mail_from_email');
-			$this->mailer->notify_event('booking.created', $to, array(
+			$this->mailer->dispatch_event('booking.created', array(
 				'customer' => $name,
 				'unit_no' => $unit->unit_no,
-				'amount' => format_inr(request_value('amount', $unit->price))
+				'amount' => format_inr(request_value('amount', $unit->price)),
+				'company_id' => $company_id ? (int) $company_id : 0,
+				'project_id' => (int) $unit->project_id,
+				'actor_user_id' => $this->user_id()
 			));
 			$this->log_activity('booking.create', 'Booking created for ' . $unit->unit_no, 'bookings', $id);
 			$this->api_response->ok($this->booking_model->decorate($this->booking_model->find($id)), 'Booking created.', 201);

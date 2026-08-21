@@ -50,7 +50,27 @@ class Mailer
 		return $status !== 'failed';
 	}
 
+	/**
+	 * Legacy helper — sets target_email then uses template recipient rules.
+	 */
 	public function notify_event($event, $to, $context = array())
+	{
+		if ($to) {
+			$context['target_email'] = $to;
+		}
+		return $this->dispatch_event($event, $context);
+	}
+
+	/**
+	 * Send an event email to everyone selected on the template (recipients).
+	 * Context keys used for routing:
+	 *  - target_email / target_user_id
+	 *  - company_id
+	 *  - project_id (resolves related companies)
+	 *  - actor_user_id
+	 *  - extra_emails (one-off list)
+	 */
+	public function dispatch_event($event, $context = array())
 	{
 		$fallback = $this->_fallback_templates();
 		$row = $this->CI->email_template_model->find_by_event($event);
@@ -60,26 +80,29 @@ class Mailer
 			}
 			$subject = $row->subject;
 			$tpl = $row->body;
+			$recipients = $this->CI->email_template_model->parse_recipients($row);
 		} elseif (isset($fallback[$event])) {
 			list($subject, $tpl) = $fallback[$event];
+			$recipients = $this->CI->email_template_model->default_recipients_for($event);
 		} else {
 			return false;
 		}
 
 		foreach ($context as $key => $value) {
+			if (is_array($value) || is_object($value)) {
+				continue;
+			}
 			$needle = '{' . $key . '}';
 			$repl = (string) $value;
 			$subject = str_ireplace($needle, $repl, $subject);
 			$tpl = str_ireplace($needle, $repl, $tpl);
 		}
-		// Always guarantee a clickable set/reset password URL is present.
 		if (!empty($context['link'])) {
 			$link = (string) $context['link'];
 			if (strpos($tpl, $link) === false) {
 				$tpl .= "\n\nSet / reset password link (valid " . (isset($context['expires']) ? $context['expires'] : '48 hours') . "):\n" . $link;
 			}
 		}
-		// Inventory status mail must never leave a blank "New status:" line.
 		if ($event === 'inventory.status' && !empty($context['status'])) {
 			$statusText = (string) $context['status'];
 			if (stripos($subject, $statusText) === false) {
@@ -89,7 +112,146 @@ class Mailer
 				$tpl = rtrim($tpl) . "\nNew status: " . $statusText;
 			}
 		}
-		return $this->send($to, $subject, $tpl, $event);
+
+		$emails = $this->resolve_recipient_emails($recipients, $context);
+		if (!$emails) {
+			return false;
+		}
+		$ok = true;
+		foreach ($emails as $email) {
+			if (!$this->send($email, $subject, $tpl, $event)) {
+				$ok = false;
+			}
+		}
+		return $ok;
+	}
+
+	public function resolve_recipient_emails($recipients, $context = array())
+	{
+		$emails = array();
+		$company_id = !empty($context['company_id']) ? (int) $context['company_id'] : 0;
+		$project_id = !empty($context['project_id']) ? (int) $context['project_id'] : 0;
+
+		$company_ids = array();
+		if ($company_id) {
+			$company_ids[] = $company_id;
+		}
+		if ($project_id) {
+			$rows = $this->CI->db->select('company_id')
+				->from('company_project_assignments')
+				->where('project_id', $project_id)
+				->get()->result();
+			foreach ($rows as $row) {
+				$company_ids[] = (int) $row->company_id;
+			}
+		}
+		$company_ids = array_values(array_unique(array_filter($company_ids)));
+
+		if (!empty($recipients['target_user'])) {
+			if (!empty($context['target_email'])) {
+				$emails[] = $context['target_email'];
+			} elseif (!empty($context['target_user_id'])) {
+				$user = $this->CI->db->where('id', (int) $context['target_user_id'])
+					->where('status', 'active')
+					->where('deleted_at IS NULL', null, false)
+					->get('users')->row();
+				if ($user && $user->email) {
+					$emails[] = $user->email;
+				}
+			}
+		}
+
+		if (!empty($recipients['promoter_admin'])) {
+			$rows = $this->CI->db->where('role', 'promoter_admin')
+				->where('status', 'active')
+				->where('deleted_at IS NULL', null, false)
+				->get('users')->result();
+			foreach ($rows as $row) {
+				if ($row->email) {
+					$emails[] = $row->email;
+				}
+			}
+		}
+
+		$need_company_users = !empty($recipients['team_admin'])
+			|| !empty($recipients['team_user'])
+			|| !empty($recipients['company_all']);
+		if ($need_company_users && $company_ids) {
+			$this->CI->db->where_in('company_id', $company_ids)
+				->where('status', 'active')
+				->where('deleted_at IS NULL', null, false);
+			if (!empty($recipients['company_all'])) {
+				// all roles in company
+			} elseif (!empty($recipients['team_admin']) && !empty($recipients['team_user'])) {
+				$this->CI->db->where_in('role', array('marketing_team_admin', 'marketing_team_user'));
+			} elseif (!empty($recipients['team_admin'])) {
+				$this->CI->db->where('role', 'marketing_team_admin');
+			} else {
+				$this->CI->db->where('role', 'marketing_team_user');
+			}
+			$rows = $this->CI->db->get('users')->result();
+			foreach ($rows as $row) {
+				if ($row->email) {
+					$emails[] = $row->email;
+				}
+			}
+		}
+
+		if (!empty($recipients['company_email']) && $company_ids) {
+			$companies = $this->CI->db->where_in('id', $company_ids)
+				->where('deleted_at IS NULL', null, false)
+				->get('marketing_companies')->result();
+			foreach ($companies as $company) {
+				if (!empty($company->email)) {
+					$emails[] = $company->email;
+				}
+			}
+		}
+
+		if (!empty($recipients['actor'])) {
+			$actor_id = !empty($context['actor_user_id']) ? (int) $context['actor_user_id'] : 0;
+			if (!$actor_id && !empty($this->CI->auth_user)) {
+				$actor_id = (int) $this->CI->auth_user->id;
+			}
+			if ($actor_id) {
+				$user = $this->CI->db->where('id', $actor_id)
+					->where('status', 'active')
+					->where('deleted_at IS NULL', null, false)
+					->get('users')->row();
+				if ($user && $user->email) {
+					$emails[] = $user->email;
+				}
+			}
+		}
+
+		$extra = array();
+		if (!empty($recipients['extra_emails'])) {
+			$extra = array_merge($extra, $this->_split_emails($recipients['extra_emails']));
+		}
+		if (!empty($context['extra_emails'])) {
+			$extra = array_merge($extra, $this->_split_emails($context['extra_emails']));
+		}
+		foreach ($extra as $email) {
+			$emails[] = $email;
+		}
+
+		$clean = array();
+		foreach ($emails as $email) {
+			$email = strtolower(trim((string) $email));
+			if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+				$clean[$email] = true;
+			}
+		}
+		return array_keys($clean);
+	}
+
+	private function _split_emails($value)
+	{
+		if (is_array($value)) {
+			return $value;
+		}
+		$parts = preg_split('/[,;\s]+/', (string) $value);
+		return is_array($parts) ? $parts : array();
 	}
 
 	private function _fallback_templates()

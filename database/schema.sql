@@ -315,6 +315,7 @@ CREATE TABLE `email_templates` (
   `subject` VARCHAR(200) NOT NULL,
   `body` TEXT NOT NULL,
   `placeholders` VARCHAR(500) NULL,
+  `recipients` TEXT NULL,
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `updated_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL,

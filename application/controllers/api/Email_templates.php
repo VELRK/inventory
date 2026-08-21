@@ -22,7 +22,8 @@ class Email_templates extends Api_Controller
 			$this->api_response->ok(array(
 				'items' => $list,
 				'total' => count($list),
-				'hint' => 'Placeholders like {name} are replaced when the email is sent.'
+				'recipient_options' => $this->email_template_model->recipient_catalog(),
+				'hint' => 'Choose who receives each email. Placeholders like {name} are replaced when sending.'
 			));
 		}
 		$this->api_response->error('METHOD_NOT_ALLOWED', 'Unsupported method.', 405);
@@ -50,11 +51,17 @@ class Email_templates extends Api_Controller
 			}
 			$active = request_value('is_active');
 			$is_active = $active === null ? (int) $row->is_active : ((int) $active ? 1 : 0);
+			$recipients_in = request_value('recipients', null);
+			$recipients = $this->email_template_model->normalize_recipients_input(
+				$row->event_key,
+				$recipients_in !== null ? $recipients_in : $this->email_template_model->parse_recipients($row)
+			);
 			$updated = $this->email_template_model->update_template($id, array(
 				'name' => $name !== '' ? $name : $row->name,
 				'subject' => $subject,
 				'body' => $body,
-				'is_active' => $is_active
+				'is_active' => $is_active,
+				'recipients' => json_encode($recipients)
 			));
 			$this->log_activity('email_template.update', 'Updated email template ' . $row->event_key, 'email_templates', $id);
 			$this->api_response->ok($this->_decorate($updated), 'Template saved.');
@@ -84,6 +91,7 @@ class Email_templates extends Api_Controller
 			'subject' => $match['subject'],
 			'body' => $match['body'],
 			'placeholders' => $match['placeholders'],
+			'recipients' => json_encode($match['recipients']),
 			'is_active' => 1
 		));
 		$this->log_activity('email_template.reset', 'Reset email template ' . $row->event_key, 'email_templates', $id);
@@ -92,6 +100,16 @@ class Email_templates extends Api_Controller
 
 	private function _decorate($row)
 	{
+		$recipients = $this->email_template_model->parse_recipients($row);
+		$labels = array();
+		foreach ($this->email_template_model->recipient_catalog() as $opt) {
+			if (!empty($recipients[$opt['key']])) {
+				$labels[] = $opt['label'];
+			}
+		}
+		if (!empty($recipients['extra_emails'])) {
+			$labels[] = 'Extra: ' . $recipients['extra_emails'];
+		}
 		return array(
 			'id' => (int) $row->id,
 			'event_key' => $row->event_key,
@@ -99,6 +117,9 @@ class Email_templates extends Api_Controller
 			'subject' => $row->subject,
 			'body' => $row->body,
 			'placeholders' => $row->placeholders,
+			'recipients' => $recipients,
+			'recipients_summary' => $labels ? implode(' · ', $labels) : 'No recipients selected',
+			'locked_recipients' => $this->email_template_model->locked_recipient_keys($row->event_key),
 			'is_active' => (int) $row->is_active === 1,
 			'updated_at' => $row->updated_at,
 			'created_at' => $row->created_at

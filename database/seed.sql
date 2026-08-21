@@ -13,7 +13,7 @@ INSERT INTO `settings` (`setting_key`,`setting_value`,`setting_group`,`is_secret
 ('mail_from_email','info@superfinelabels.in','mail',0,NOW()),
 ('mail_from_name','Inventory','mail',0,NOW()),
 ('mail_enabled','1','mail',0,NOW()),
-('test_admin_email','admin@syncr.test','credentials',0,NOW()),
+('test_admin_email','velrke@gmail.com','credentials',0,NOW()),
 ('test_admin_password','Admin@123','credentials',0,NOW()),
 ('test_team_admin_email','teamadmin@abc.test','credentials',0,NOW()),
 ('test_team_admin_password','TeamAdmin@123','credentials',0,NOW()),
@@ -25,7 +25,7 @@ INSERT INTO `marketing_companies` (`id`,`name`,`email`,`phone`,`address`,`city`,
 (2,'Horizon Sales','hello@horizon.test','9876500002','88 MG Road','Chennai','active','["view_inventory","submit_block_requests","manage_users"]',NOW());
 
 INSERT INTO `users` (`id`,`company_id`,`name`,`email`,`password_hash`,`phone`,`role`,`status`,`created_at`) VALUES
-(1,NULL,'Admin','admin@syncr.test','$2y$10$CHLje7UsoZvdvxkrteyez.9F4C2K15fBp.Jx/99qEvONnyaJ/Bih.','9000000001','promoter_admin','active',NOW()),
+(1,NULL,'Admin','velrke@gmail.com','$2y$10$CHLje7UsoZvdvxkrteyez.9F4C2K15fBp.Jx/99qEvONnyaJ/Bih.','9000000001','promoter_admin','active',NOW()),
 (2,1,'Kavitha Raj','teamadmin@abc.test','$2y$10$hDq8X61nOiuKdoJkuzj1Pevu9GBlq.9ltMmfRQ29/V8aK9/3TjmUK','9000000002','marketing_team_admin','active',NOW()),
 (3,1,'Arun Sales','user@abc.test','$2y$10$S8Kk4PUYpcLm7z9jpCUHdOK1SSGXPUhijU0HSXybk5JGgzH65LiBK','9000000003','marketing_team_user','active',NOW()),
 (4,2,'Hari Horizon','hari@horizon.test','$2y$10$S8Kk4PUYpcLm7z9jpCUHdOK1SSGXPUhijU0HSXybk5JGgzH65LiBK','9000000004','marketing_team_admin','active',NOW());

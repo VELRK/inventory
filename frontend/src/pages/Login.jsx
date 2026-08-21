@@ -3,14 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, setSession } from '../api';
 
 const demos = [
-  ['Admin', 'admin@syncr.test', 'Admin@123'],
+  ['Admin', 'velrke@gmail.com', 'Admin@123'],
   ['Team Admin', 'teamadmin@abc.test', 'TeamAdmin@123'],
   ['Team User', 'user@abc.test', 'TeamUser@123'],
 ];
 
 export default function Login() {
   const nav = useNavigate();
-  const [email, setEmail] = useState('admin@syncr.test');
+  const [email, setEmail] = useState('velrke@gmail.com');
   const [password, setPassword] = useState('Admin@123');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);

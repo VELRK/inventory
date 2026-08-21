@@ -36,7 +36,7 @@ Open [http://localhost:5173](http://localhost:5173)
 
 | Role | Email | Password |
 |---|---|---|
-| Promoter / Admin | `admin@syncr.test` | `Admin@123` |
+| Promoter / Admin | `velrke@gmail.com` | `Admin@123` |
 | Marketing Team Admin (ABC) | `teamadmin@abc.test` | `TeamAdmin@123` |
 | Marketing Team User (ABC) | `user@abc.test` | `TeamUser@123` |
 | Horizon Team Admin | `hari@horizon.test` | `TeamUser@123` |

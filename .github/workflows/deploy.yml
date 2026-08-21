@@ -1,0 +1,64 @@
+name: Deploy to Hostinger (plots)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React admin (base /plots/app/)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          mkdir -p ../app
+          rm -rf ../app/*
+          cp -r dist/. ../app/
+
+      - name: Deploy via rsync over SSH
+        uses: easingthemes/ssh-deploy@v5.1.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PORT: ${{ secrets.REMOTE_PORT }}
+          SSH_CMD_ARGS: "-o StrictHostKeyChecking=no -o AddressFamily=inet -4"
+          ARGS: "-rlgoDzvc --delete"
+          SOURCE: "./"
+          TARGET: ${{ secrets.REMOTE_PATH }}
+          EXCLUDE: "/.git/, /.github/, /frontend/node_modules/, /frontend/dist/, /frontend/src/, /_ci_tmp/, /ci3.zip, /tests/, /docs/, /application/logs/*, /application/cache/sessions/*, /uploads/projects/, /uploads/users/, /uploads/units/, /uploads/documents/, /application/config/database.php, /README.md"
+          SCRIPT_AFTER: |
+            set -e
+            cd "${{ secrets.REMOTE_PATH }}"
+
+            # Production URL under https://superfinelabels.in/plots/
+            if [ -f .htaccess ]; then
+              sed -i 's|RewriteBase /inventory/|RewriteBase /plots/|g' .htaccess || true
+              sed -i 's|RewriteBase /plots/|RewriteBase /plots/|g' .htaccess || true
+            fi
+            if [ -f application/config/config.php ]; then
+              sed -i "s|\$config\['base_url'\] = '.*';|\$config['base_url'] = 'https://superfinelabels.in/plots/';|g" application/config/config.php || true
+            fi
+
+            # Keep upload folders writable; do not wipe existing images
+            mkdir -p uploads/projects uploads/users uploads/units uploads/documents
+            mkdir -p application/logs application/cache/sessions
+            touch uploads/projects/index.html uploads/users/index.html uploads/units/index.html uploads/documents/index.html
+            chmod -R 775 uploads application/logs application/cache || true
+
+            echo "Deployed to https://superfinelabels.in/plots/"
+            echo "Admin UI: https://superfinelabels.in/plots/app/"
+            echo "API: https://superfinelabels.in/plots/index.php/api/docs"

@@ -1,0 +1,15 @@
+# Local XAMPP
+RewriteEngine On
+RewriteBase /inventory/
+
+# On Hostinger (superfinelabels.in/plots) GitHub Actions rewrites this to /plots/
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php/$1 [L]
+
+<IfModule mod_headers.c>
+	Header always set Access-Control-Allow-Origin "*"
+	Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+	Header always set Access-Control-Allow-Headers "Origin, Content-Type, Authorization, X-Requested-With, Accept"
+</IfModule>

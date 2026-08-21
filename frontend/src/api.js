@@ -19,6 +19,27 @@ export function clearSession() {
   localStorage.removeItem('syncr_user');
 }
 
+/** Check if current (or given) user has a permission key from Access control. */
+export function can(permissionKey, user = getUser()) {
+  if (!user) return false;
+  if (user.role === 'promoter_admin' && (permissionKey === 'nav.access' || permissionKey === 'access.manage')) {
+    return true;
+  }
+  const list = user.permissions;
+  if (!Array.isArray(list)) {
+    // Legacy session before permissions existed — keep old role defaults.
+    if (user.role === 'promoter_admin') return true;
+    if (user.role === 'marketing_team_admin') {
+      return [
+        'nav.dashboard', 'nav.projects', 'nav.inventory', 'nav.requests', 'nav.bookings', 'nav.users',
+        'inventory.edit', 'users.manage', 'bookings.manage',
+      ].includes(permissionKey);
+    }
+    return ['nav.dashboard', 'nav.projects', 'nav.inventory', 'nav.requests', 'nav.users'].includes(permissionKey);
+  }
+  return list.includes(permissionKey);
+}
+
 export async function api(path, { method = 'GET', body, headers } = {}) {
   const opts = {
     method,

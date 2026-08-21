@@ -44,8 +44,15 @@ class User_model extends CI_Model
 			'company_id' => $user->company_id ? (int) $user->company_id : null,
 			'company_name' => $company ? $company->name : 'Promoter',
 			'initials' => initials_of($user->name),
-			'projects' => $projects
+			'projects' => $projects,
+			'permissions' => $this->_permissions_for($user->role)
 		);
+	}
+
+	private function _permissions_for($role)
+	{
+		$this->load->model('role_permission_model');
+		return $this->role_permission_model->permissions_for_role($role);
 	}
 
 	public function list_filtered($filters, $limit, $offset)

@@ -24,7 +24,7 @@ class Inventory extends Api_Controller
 			$this->api_response->paginated($items, $total, $page, $limit, array('stats' => $stats));
 		}
 		if ($method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('inventory.create');
 			$data = $this->_payload(null);
 			if ($data['unit_no'] === '' || !$data['project_id']) {
 				$this->api_response->validation(array('unit_no' => 'Unit number is required.', 'project_id' => 'Project is required.'));
@@ -57,7 +57,7 @@ class Inventory extends Api_Controller
 			$this->api_response->ok($this->inventory_model->decorate($unit));
 		}
 		if ($method === 'PUT' || $method === 'POST') {
-			$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
+			$this->require_permission('inventory.edit');
 			$old = $unit->status;
 			$data = $this->_payload($unit);
 			// Team admin cannot move a unit to a project outside their assignment.
@@ -84,7 +84,7 @@ class Inventory extends Api_Controller
 			$this->api_response->ok($this->inventory_model->decorate($fresh), 'Unit updated.');
 		}
 		if ($method === 'DELETE') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('inventory.delete');
 			$this->db->where('id', (int) $id)->update('inventory_units', array('deleted_at' => now_dt()));
 			$this->log_activity('inventory.archive', 'Archived unit ' . $unit->unit_no, 'inventory_units', $id);
 			$this->api_response->ok(array(), 'Unit archived.');
@@ -122,7 +122,7 @@ class Inventory extends Api_Controller
 
 	public function bulk()
 	{
-		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
+		$this->require_permission('inventory.edit');
 		$ids = request_value('ids', array());
 		$action = request_value('action', 'change_status');
 		$status = request_value('status');

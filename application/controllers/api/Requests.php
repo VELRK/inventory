@@ -134,7 +134,7 @@ class Requests extends Api_Controller
 
 	public function review($id)
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('requests.review');
 		$row = $this->request_model->find($id);
 		if (!$row) {
 			$this->api_response->error('NOT_FOUND', 'Request not found.', 404);

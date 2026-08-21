@@ -6,7 +6,7 @@ class Settings extends Api_Controller
 	public function __construct()
 	{
 		parent::__construct();
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('settings.manage');
 	}
 
 	public function index()

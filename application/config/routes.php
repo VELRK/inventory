@@ -70,6 +70,8 @@ $route['api/schema/query'] = 'api/schema_studio/query';
 $route['api/schema/logs'] = 'api/schema_studio/logs';
 $route['api/schema/delete-data'] = 'api/schema_studio/delete_data';
 
+$route['api/access'] = 'api/access/index';
+
 $route['api/docs'] = 'api/docs/index';
 $route['api/docs/catalog'] = 'api/docs/catalog';
 

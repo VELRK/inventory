@@ -57,6 +57,25 @@ class Api_Controller extends CI_Controller
 		}
 	}
 
+	protected function has_permission($permission_key)
+	{
+		if (!$this->auth_user) {
+			return false;
+		}
+		$this->load->model('role_permission_model');
+		return $this->role_permission_model->has($this->auth_user->role, $permission_key);
+	}
+
+	protected function require_permission($permission_key)
+	{
+		if (!$this->auth_user) {
+			$this->api_response->error('UNAUTHORIZED', 'Authentication required.', 401);
+		}
+		if (!$this->has_permission($permission_key)) {
+			$this->api_response->error('FORBIDDEN', 'You do not have permission for this action.', 403);
+		}
+	}
+
 	protected function is_admin()
 	{
 		return $this->auth_user && $this->auth_user->role === 'promoter_admin';

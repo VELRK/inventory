@@ -22,7 +22,7 @@ class Registrations extends Api_Controller
 			));
 		}
 		if ($method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('registrations.manage');
 			$unit_id = (int) request_value('unit_id');
 			$unit = $this->inventory_model->find($unit_id);
 			if (!$unit) {
@@ -63,7 +63,7 @@ class Registrations extends Api_Controller
 
 	public function item($id)
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('registrations.manage');
 		$row = $this->registration_model->find($id);
 		if (!$row) {
 			$this->api_response->error('NOT_FOUND', 'Registration not found.', 404);
@@ -106,7 +106,7 @@ class Registrations extends Api_Controller
 
 	public function export()
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('registrations.manage');
 		list($items) = $this->registration_model->list_filtered($this->_filters(), 1000, 0);
 		$rows = array();
 		foreach ($items as $item) {

@@ -25,7 +25,7 @@ class Companies extends Api_Controller
 			$this->api_response->paginated($items, $total, $page, $limit);
 		}
 		if ($method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('companies.manage');
 			$name = trim((string) request_value('name'));
 			$email = trim((string) request_value('email'));
 			if ($name === '' || $email === '') {
@@ -67,7 +67,7 @@ class Companies extends Api_Controller
 			$this->api_response->ok($this->company_model->decorate($company));
 		}
 		if ($method === 'PUT' || $method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('companies.manage');
 			$permissions = request_value('permissions', $company->permissions ? json_decode($company->permissions, true) : array());
 			if (!is_array($permissions)) {
 				$permissions = array();
@@ -89,7 +89,7 @@ class Companies extends Api_Controller
 			$this->api_response->ok($this->company_model->decorate($this->company_model->find($id)), 'Company updated.');
 		}
 		if ($method === 'DELETE') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('companies.manage');
 			$this->db->where('id', (int) $id)->update('marketing_companies', array('deleted_at' => now_dt(), 'status' => 'inactive', 'updated_at' => now_dt()));
 			$this->log_activity('company.delete', 'Archived company ' . $company->name, 'marketing_companies', $id);
 			$this->api_response->ok(array(), 'Company deleted.');
@@ -99,7 +99,7 @@ class Companies extends Api_Controller
 
 	public function projects($id)
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('companies.manage');
 		$this->company_model->set_projects($id, request_value('project_ids', array()));
 		$this->api_response->ok($this->company_model->decorate($this->company_model->find($id)), 'Projects assigned.');
 	}

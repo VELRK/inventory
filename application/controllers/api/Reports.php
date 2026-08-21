@@ -7,7 +7,7 @@ class Reports extends Api_Controller
 	{
 		parent::__construct();
 		$this->load->model(array('booking_model', 'registration_model', 'company_model', 'project_model'));
-		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
+		$this->require_permission('nav.bookings');
 	}
 
 	public function index()

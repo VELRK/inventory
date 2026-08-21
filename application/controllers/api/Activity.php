@@ -5,6 +5,7 @@ class Activity extends Api_Controller
 {
 	public function index()
 	{
+		$this->require_permission('activity.view');
 		list($page, $limit, $offset) = pagination_params();
 		$filters = array(
 			'q' => request_value('q'),

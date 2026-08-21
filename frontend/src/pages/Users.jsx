@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api, getUser, updateSessionUser } from '../api';
+import { api, can, getUser, updateSessionUser } from '../api';
 import { Badge, Field, Modal, Pager, RowActions, confirmDelete, ImageField } from '../components/ui';
 
 export default function UsersPage() {
   const me = getUser();
-  const canManage = me?.role !== 'marketing_team_user';
+  const canManage = can('users.manage', me);
   const admin = me?.role === 'promoter_admin';
   const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1, limit: 10 });
   const [limit, setLimit] = useState(10);

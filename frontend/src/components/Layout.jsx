@@ -1,34 +1,26 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, Boxes, Users, ClipboardList, FileBarChart,
-  Activity, Settings, Database, TerminalSquare, Bell, LogOut, KeyRound, Mail
+  Activity, Settings, Database, TerminalSquare, Bell, LogOut, KeyRound, Mail, Shield
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { api, clearSession, getUser, updateSessionUser } from '../api';
+import { api, can, clearSession, getUser, updateSessionUser } from '../api';
 import { Field, ImageField, Modal } from './ui';
 
-const adminNav = [
-  ['/', 'Dashboard', LayoutDashboard],
-  ['/projects', 'Projects', Building2],
-  ['/inventory', 'Inventory', Boxes],
-  ['/teams', 'Companies', Users],
-  ['/users', 'Users', Users],
-  ['/requests', 'Requests', ClipboardList],
-  ['/reports', 'Bookings', FileBarChart],
-  ['/activity', 'Activity', Activity],
-  ['/settings', 'Settings', Settings],
-  ['/email-templates', 'Email templates', Mail],
-  ['/schema', 'Schema Studio', Database],
-  ['/api-tester', 'API Tester', TerminalSquare],
-];
-
-const teamNav = [
-  ['/', 'Dashboard', LayoutDashboard],
-  ['/projects', 'Projects', Building2],
-  ['/inventory', 'Inventory', Boxes],
-  ['/requests', 'My Requests', ClipboardList],
-  ['/reports', 'Bookings', FileBarChart],
-  ['/users', 'Team Users', Users],
+const allNav = [
+  ['/', 'Dashboard', LayoutDashboard, 'nav.dashboard'],
+  ['/projects', 'Projects', Building2, 'nav.projects'],
+  ['/inventory', 'Inventory', Boxes, 'nav.inventory'],
+  ['/teams', 'Companies', Users, 'nav.companies'],
+  ['/users', 'Users', Users, 'nav.users'],
+  ['/requests', 'Requests', ClipboardList, 'nav.requests'],
+  ['/reports', 'Bookings', FileBarChart, 'nav.bookings'],
+  ['/activity', 'Activity', Activity, 'nav.activity'],
+  ['/settings', 'Settings', Settings, 'nav.settings'],
+  ['/email-templates', 'Email templates', Mail, 'nav.email_templates'],
+  ['/access', 'Access', Shield, 'nav.access'],
+  ['/schema', 'Schema Studio', Database, 'nav.schema'],
+  ['/api-tester', 'API Tester', TerminalSquare, 'nav.api_tester'],
 ];
 
 export default function Layout() {
@@ -41,11 +33,15 @@ export default function Layout() {
   const [pwd, setPwd] = useState({ current_password: '', new_password: '', new_password_confirm: '' });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  const items = user?.role === 'promoter_admin'
-    ? adminNav
-    : user?.role === 'marketing_team_admin'
-      ? teamNav
-      : teamNav.filter(([path]) => path !== '/reports');
+  const items = allNav.filter(([, , , perm]) => can(perm, user)).map(([to, label, Icon]) => {
+    if (to === '/users' && user?.role !== 'promoter_admin') {
+      return [to, 'Team Users', Icon];
+    }
+    if (to === '/requests' && user?.role !== 'promoter_admin') {
+      return [to, 'My Requests', Icon];
+    }
+    return [to, label, Icon];
+  });
 
   function applyUser(next) {
     updateSessionUser(next);

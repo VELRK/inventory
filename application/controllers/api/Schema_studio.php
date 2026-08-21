@@ -9,7 +9,7 @@ class Schema_studio extends Api_Controller
 		$this->load->library('schema_guard');
 		$read = array('tables', 'columns', 'full', 'index');
 		if (!in_array($this->router->method, $read, true)) {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('nav.schema');
 		}
 	}
 

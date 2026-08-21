@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { getToken, getUser } from './api';
+import { can, getToken, getUser } from './api';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -16,13 +16,14 @@ import SettingsPage from './pages/Settings';
 import SchemaStudio from './pages/SchemaStudio';
 import ApiTester from './pages/ApiTester';
 import EmailTemplates from './pages/EmailTemplates';
+import AccessPage from './pages/Access';
 
 function Guard({ children }) {
   return getToken() ? children : <Navigate to="/login" replace />;
 }
 
-function AdminOnly({ children }) {
-  return getUser()?.role === 'promoter_admin' ? children : <Navigate to="/" replace />;
+function CanAccess({ permission, children }) {
+  return can(permission, getUser()) ? children : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -42,9 +43,10 @@ export default function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="settings" element={<SettingsPage />} />
-          <Route path="email-templates" element={<AdminOnly><EmailTemplates /></AdminOnly>} />
-          <Route path="schema" element={<AdminOnly><SchemaStudio /></AdminOnly>} />
-          <Route path="api-tester" element={<AdminOnly><ApiTester /></AdminOnly>} />
+          <Route path="email-templates" element={<CanAccess permission="nav.email_templates"><EmailTemplates /></CanAccess>} />
+          <Route path="access" element={<CanAccess permission="nav.access"><AccessPage /></CanAccess>} />
+          <Route path="schema" element={<CanAccess permission="nav.schema"><SchemaStudio /></CanAccess>} />
+          <Route path="api-tester" element={<CanAccess permission="nav.api_tester"><ApiTester /></CanAccess>} />
         </Route>
       </Routes>
     </BrowserRouter>

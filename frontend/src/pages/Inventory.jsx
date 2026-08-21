@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, fmt, getUser } from '../api';
+import { api, can, fmt, getUser } from '../api';
 import { Badge, Field, Modal, Pager, RowActions, confirmDelete } from '../components/ui';
 
 const statuses = ['', 'available', 'on_hold', 'booked', 'registered'];
@@ -12,10 +12,10 @@ const blankBook = {
 
 export default function Inventory() {
   const me = getUser();
-  const admin = me?.role === 'promoter_admin';
-  const teamAdmin = me?.role === 'marketing_team_admin';
-  const canEdit = admin || teamAdmin;
-  const canBook = admin || teamAdmin;
+  const canCreate = can('inventory.create', me);
+  const canEdit = can('inventory.edit', me);
+  const canDelete = can('inventory.delete', me);
+  const canBook = can('bookings.manage', me);
   const [params, setParams] = useSearchParams();
   const projectId = params.get('project_id') || '';
   const [projects, setProjects] = useState([]);
@@ -42,7 +42,7 @@ export default function Inventory() {
   }
   useEffect(() => {
     api('/projects?limit=100').then((r) => setProjects(r.data.items || []));
-    if (admin) api('/companies?limit=100').then((r) => setCompanies(r.data.items || [])).catch(() => {});
+    if (can('companies.manage', me)) api('/companies?limit=100').then((r) => setCompanies(r.data.items || [])).catch(() => {});
     load(1);
   }, [projectId, status]);
 
@@ -129,7 +129,7 @@ export default function Inventory() {
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <input className="input search" placeholder="Unit no" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load(1)} />
-        {admin && <button className="btn btn-gold" onClick={openAdd}>+ Add Unit</button>}
+        {canCreate && <button className="btn btn-gold" onClick={openAdd}>+ Add Unit</button>}
         {canEdit && bulk.length > 0 && <button className="btn btn-outline" onClick={bulkUpdate}>Hold {bulk.length} units</button>}
       </div>
       {err && <div className="alert alert-err">{err}</div>}
@@ -158,7 +158,7 @@ export default function Inventory() {
             <Badge status={u.status} />
             <RowActions
               onEdit={canEdit ? () => openEdit(u) : undefined}
-              onDelete={admin ? () => remove(u) : undefined}
+              onDelete={canDelete ? () => remove(u) : undefined}
             >
               <button className="btn btn-ghost btn-sm" onClick={() => setDetail(u)}>View</button>
             </RowActions>
@@ -215,7 +215,7 @@ export default function Inventory() {
             {canEdit && (
               <>
                 <button className="btn btn-outline" onClick={() => { setDetail(null); openEdit(detail); }}>Edit</button>
-                {admin && <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>}
+                {canDelete && <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>}
               </>
             )}
             {canBook && bookable && (
@@ -254,7 +254,7 @@ export default function Inventory() {
               <Field label="Amount"><input className="input" type="number" value={book.amount} onChange={(e) => setBook({ ...book, amount: e.target.value })} /></Field>
               <Field label="Booking date"><input className="input" type="date" value={book.booking_date} onChange={(e) => setBook({ ...book, booking_date: e.target.value })} /></Field>
             </div>
-            {admin && (
+            {can('companies.manage', me) && (
               <Field label="Company">
                 <select className="select" value={book.company_id} onChange={(e) => setBook({ ...book, company_id: e.target.value })}>
                   <option value="">None</option>

@@ -7,7 +7,7 @@ class Email_templates extends Api_Controller
 	{
 		parent::__construct();
 		$this->load->model('email_template_model');
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('nav.email_templates');
 	}
 
 	public function index()

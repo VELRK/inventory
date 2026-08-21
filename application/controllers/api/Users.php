@@ -20,9 +20,7 @@ class Users extends Api_Controller
 			$this->api_response->paginated($items, $total, $page, $limit);
 		}
 		if ($method === 'POST') {
-			if (!$this->is_admin() && !$this->is_team_admin()) {
-				$this->api_response->error('FORBIDDEN', 'You cannot create users.', 403);
-			}
+			$this->require_permission('users.manage');
 			$name = trim((string) request_value('name'));
 			$email = trim((string) request_value('email'));
 			$role = request_value('role', 'marketing_team_user');
@@ -97,7 +95,7 @@ class Users extends Api_Controller
 		}
 		if ($method === 'PUT' || $method === 'POST') {
 			$is_self = ((int) $id === $this->user_id());
-			$can_manage = $this->is_admin() || $this->is_team_admin();
+			$can_manage = $this->has_permission('users.manage');
 			if (!$can_manage && !$is_self) {
 				$this->api_response->error('FORBIDDEN', 'You cannot update users.', 403);
 			}
@@ -136,9 +134,7 @@ class Users extends Api_Controller
 			$this->api_response->ok($this->user_model->public_user($this->user_model->find($id)), 'User updated.');
 		}
 		if ($method === 'DELETE') {
-			if (!$this->is_admin() && !$this->is_team_admin()) {
-				$this->api_response->error('FORBIDDEN', 'You cannot delete users.', 403);
-			}
+			$this->require_permission('users.manage');
 			if ((int) $id === $this->user_id()) {
 				$this->api_response->error('FORBIDDEN', 'You cannot delete your own account.', 403);
 			}

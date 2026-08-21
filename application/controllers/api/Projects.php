@@ -22,7 +22,7 @@ class Projects extends Api_Controller
 			$this->api_response->paginated($items, $total, $page, $limit);
 		}
 		if ($method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('projects.manage');
 			$data = $this->_payload();
 			if ($data['name'] === '' || $data['city'] === '') {
 				$this->api_response->validation(array('name' => 'Name is required.', 'city' => 'City is required.'));
@@ -51,7 +51,7 @@ class Projects extends Api_Controller
 			$this->api_response->ok($this->project_model->with_stats($project));
 		}
 		if ($method === 'PUT' || $method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('projects.manage');
 			$data = $this->_payload($project);
 			$data['updated_at'] = now_dt();
 			$this->db->where('id', (int) $id)->update('projects', $data);
@@ -59,7 +59,7 @@ class Projects extends Api_Controller
 			$this->api_response->ok($this->project_model->with_stats($this->project_model->find($id)), 'Project updated.');
 		}
 		if ($method === 'DELETE') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_permission('projects.manage');
 			$this->db->where('id', (int) $id)->update('projects', array('deleted_at' => now_dt(), 'status' => 'inactive'));
 			$this->log_activity('project.archive', 'Archived project ' . $project->name, 'projects', $id);
 			$this->api_response->ok(array(), 'Project archived.');
@@ -69,7 +69,7 @@ class Projects extends Api_Controller
 
 	public function assign($id)
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_permission('projects.manage');
 		$ids = request_value('company_ids', array());
 		$this->db->where('project_id', (int) $id)->delete('company_project_assignments');
 		foreach ((array) $ids as $cid) {

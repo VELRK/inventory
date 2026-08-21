@@ -66,7 +66,6 @@ function status_label($status)
 	$map = array(
 		'available' => 'Available',
 		'on_hold' => 'On Hold',
-		'blocked' => 'Blocked',
 		'booked' => 'Booked',
 		'registered' => 'Registered',
 		'pending' => 'Pending',

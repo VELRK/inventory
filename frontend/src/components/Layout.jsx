@@ -26,6 +26,7 @@ const teamNav = [
   ['/projects', 'Projects', Building2],
   ['/inventory', 'Inventory', Boxes],
   ['/requests', 'My Requests', ClipboardList],
+  ['/reports', 'Bookings', FileBarChart],
   ['/users', 'Team Users', Users],
 ];
 
@@ -36,7 +37,11 @@ export default function Layout() {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photo, setPhoto] = useState({ avatar: '', avatar_url: '' });
   const [err, setErr] = useState('');
-  const items = user?.role === 'promoter_admin' ? adminNav : teamNav;
+  const items = user?.role === 'promoter_admin'
+    ? adminNav
+    : user?.role === 'marketing_team_admin'
+      ? teamNav
+      : teamNav.filter(([path]) => path !== '/reports');
 
   function applyUser(next) {
     updateSessionUser(next);

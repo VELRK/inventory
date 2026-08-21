@@ -39,7 +39,7 @@ class Requests extends Api_Controller
 				$this->api_response->error('FORBIDDEN', 'This unit is not assigned to you.', 403);
 			}
 			if ($unit->status !== 'available') {
-				$this->api_response->error('UNIT_NOT_AVAILABLE', 'Only available units can be blocked.', 409);
+				$this->api_response->error('UNIT_NOT_AVAILABLE', 'Only available units can be requested.', 409);
 			}
 			$name = trim((string) request_value('customer_name'));
 			$phone = trim((string) request_value('customer_phone'));
@@ -155,7 +155,10 @@ class Requests extends Api_Controller
 		));
 		$unit = $this->inventory_model->find($row->unit_id);
 		if ($decision === 'approved') {
-			$this->inventory_model->set_status($row->unit_id, 'blocked');
+			// Keep on_hold — blocked status removed; admin/team admin can book from here
+			if ($unit && $unit->status !== 'on_hold') {
+				$this->inventory_model->set_status($row->unit_id, 'on_hold');
+			}
 		} else {
 			if ($unit && $unit->status === 'on_hold') {
 				$this->inventory_model->set_status($row->unit_id, 'available');

@@ -75,7 +75,7 @@ class Inventory_model extends CI_Model
 		$this->db->select('status, COUNT(*) as cnt', false)->from('inventory_units')->where('deleted_at IS NULL', null, false);
 		if ($allowed_ids !== null) {
 			if (empty($allowed_ids)) {
-				return array('available' => 0, 'on_hold' => 0, 'blocked' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
+				return array('available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
 			}
 			$this->db->where_in('project_id', $allowed_ids);
 		}
@@ -83,7 +83,7 @@ class Inventory_model extends CI_Model
 			$this->db->where('project_id', (int) $project_id);
 		}
 		$rows = $this->db->group_by('status')->get()->result();
-		$out = array('available' => 0, 'on_hold' => 0, 'blocked' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
+		$out = array('available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
 		foreach ($rows as $row) {
 			$out[$row->status] = (int) $row->cnt;
 			$out['total'] += (int) $row->cnt;

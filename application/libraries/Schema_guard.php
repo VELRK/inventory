@@ -3,7 +3,8 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Schema_guard
 {
-	protected $blocked = array('DROP', 'TRUNCATE', 'DELETE', 'REPLACE', 'GRANT', 'REVOKE', 'SHUTDOWN', 'KILL');
+	/** Structure-destroying ops stay blocked. DELETE of row data is allowed. */
+	protected $blocked = array('DROP', 'TRUNCATE', 'REPLACE', 'GRANT', 'REVOKE', 'SHUTDOWN', 'KILL');
 
 	public function is_blocked($sql)
 	{
@@ -25,7 +26,27 @@ class Schema_guard
 		if ($blocked) {
 			return array(false, $blocked . ' statements are not allowed from the frontend schema studio.');
 		}
+		if (strpos($sql, ';') !== false && preg_match('/;.+\S/', $sql)) {
+			return array(false, 'Multiple SQL statements are not allowed.');
+		}
 		return array(true, null);
+	}
+
+	public function is_allowed_query($sql)
+	{
+		$normalized = strtoupper(ltrim($sql));
+		$starts = array('SELECT', 'SHOW', 'DESCRIBE', 'DESC ', 'EXPLAIN', 'ALTER TABLE', 'DELETE');
+		foreach ($starts as $word) {
+			if (strpos($normalized, $word) === 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public function is_delete_query($sql)
+	{
+		return (bool) preg_match('/^\s*DELETE\s+FROM\b/i', $sql);
 	}
 
 	public function allowed_add_column_types()
@@ -42,6 +63,38 @@ class Schema_guard
 	public function ident($value)
 	{
 		return preg_replace('/[^A-Za-z0-9_]/', '', (string) $value);
+	}
+
+	public function build_delete_data($table, $ids = null, $where = '')
+	{
+		$table = $this->ident($table);
+		if ($table === '') {
+			return array(false, 'Table is required.');
+		}
+		if (is_array($ids) && count($ids) > 0) {
+			$clean = array();
+			foreach ($ids as $id) {
+				if (is_numeric($id)) {
+					$clean[] = (int) $id;
+				}
+			}
+			if (empty($clean)) {
+				return array(false, 'No valid row ids provided.');
+			}
+			$sql = 'DELETE FROM `' . $table . '` WHERE `id` IN (' . implode(',', $clean) . ')';
+			return array(true, $sql);
+		}
+		$where = trim((string) $where);
+		if ($where !== '') {
+			if (preg_match('/\b(DROP|TRUNCATE|INSERT|UPDATE|ALTER|CREATE|GRANT|REVOKE|;)\b/i', $where)) {
+				return array(false, 'Unsafe WHERE clause.');
+			}
+			$sql = 'DELETE FROM `' . $table . '` WHERE ' . $where;
+			return array(true, $sql);
+		}
+		// Clear all rows in table
+		$sql = 'DELETE FROM `' . $table . '`';
+		return array(true, $sql);
 	}
 
 	public function build_add_column($table, $column, $type, $length, $nullable, $default, $after)

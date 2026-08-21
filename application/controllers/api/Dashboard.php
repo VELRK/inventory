@@ -53,7 +53,7 @@ class Dashboard extends Api_Controller
 		$breakdown = array();
 		foreach ($rows as $row) {
 			if (!isset($breakdown[$row->name])) {
-				$breakdown[$row->name] = array('name' => $row->name, 'available' => 0, 'blocked' => 0, 'booked' => 0, 'registered' => 0, 'on_hold' => 0);
+				$breakdown[$row->name] = array('name' => $row->name, 'available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0);
 			}
 			$breakdown[$row->name][$row->status] = (int) $row->cnt;
 		}
@@ -66,10 +66,9 @@ class Dashboard extends Api_Controller
 		$this->api_response->ok(array(
 			'status_pie' => array(
 				array('name' => 'Available', 'value' => $status['available']),
-				array('name' => 'Blocked', 'value' => $status['blocked']),
+				array('name' => 'On Hold', 'value' => $status['on_hold']),
 				array('name' => 'Booked', 'value' => $status['booked']),
-				array('name' => 'Registered', 'value' => $status['registered']),
-				array('name' => 'On Hold', 'value' => $status['on_hold'])
+				array('name' => 'Registered', 'value' => $status['registered'])
 			),
 			'project_breakdown' => array_values($breakdown),
 			'monthly' => array_reverse($monthly)

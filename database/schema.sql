@@ -149,7 +149,7 @@ CREATE TABLE `inventory_units` (
   `is_corner` TINYINT(1) NOT NULL DEFAULT 0,
   `approval_details` VARCHAR(150) NULL,
   `remarks` TEXT NULL,
-  `status` ENUM('available','on_hold','blocked','booked','registered') NOT NULL DEFAULT 'available',
+  `status` ENUM('available','on_hold','booked','registered') NOT NULL DEFAULT 'available',
   `created_at` DATETIME NOT NULL,
   `updated_at` DATETIME NULL,
   `deleted_at` DATETIME NULL,

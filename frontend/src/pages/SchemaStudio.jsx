@@ -6,8 +6,9 @@ export default function SchemaStudio() {
   const [tables, setTables] = useState([]);
   const [table, setTable] = useState('projects');
   const [cols, setCols] = useState([]);
-  const [sql, setSql] = useState('SELECT id, name, city FROM projects LIMIT 10');
+  const [sql, setSql] = useState('SELECT * FROM projects LIMIT 20');
   const [rows, setRows] = useState(null);
+  const [selected, setSelected] = useState([]);
   const [form, setForm] = useState({ column: '', type: 'VARCHAR', length: '100', nullable: true, default: '' });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -18,17 +19,57 @@ export default function SchemaStudio() {
     api(`/schema/columns?table=${table}`).then((r) => setCols(r.data));
     api('/schema/logs').then((r) => setLogs(r.data));
   };
-  useEffect(() => { refresh(); }, [table]);
+  useEffect(() => { refresh(); setSelected([]); setRows(null); }, [table]);
 
   async function runQuery(e) {
     e?.preventDefault();
     setErr(''); setMsg('');
     try {
       const r = await api('/schema/query', { method: 'POST', body: { sql } });
-      setRows(r.data.rows);
-      setMsg(`${r.data.count} rows`);
+      setRows(r.data.rows || []);
+      setSelected([]);
+      if (r.data.affected != null) setMsg(`${r.data.affected} row(s) deleted`);
+      else setMsg(`${r.data.count} rows`);
+      refresh();
     } catch (ex) { setErr(ex.message); setRows(null); }
   }
+
+  async function loadTableData() {
+    setSql(`SELECT * FROM \`${table}\` LIMIT 50`);
+    setErr(''); setMsg('');
+    try {
+      const r = await api('/schema/query', { method: 'POST', body: { sql: `SELECT * FROM \`${table}\` LIMIT 50` } });
+      setRows(r.data.rows || []);
+      setSelected([]);
+      setMsg(`${r.data.count} rows from ${table}`);
+    } catch (ex) { setErr(ex.message); setRows(null); }
+  }
+
+  async function deleteSelected() {
+    if (!selected.length) return;
+    if (!window.confirm(`Delete ${selected.length} selected row(s) from ${table}? This is logged in Activity.`)) return;
+    setErr('');
+    try {
+      const r = await api('/schema/delete-data', { method: 'POST', body: { table, ids: selected } });
+      setMsg(r.message || `${r.data.affected} deleted`);
+      setSelected([]);
+      loadTableData();
+      refresh();
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  async function clearTableData() {
+    if (!window.confirm(`Delete ALL rows from ${table}? Structure is kept. This is logged in Activity.`)) return;
+    setErr('');
+    try {
+      const r = await api('/schema/delete-data', { method: 'POST', body: { table, confirm: true } });
+      setMsg(r.message || `${r.data.affected} deleted`);
+      setSelected([]);
+      setRows([]);
+      refresh();
+    } catch (ex) { setErr(ex.message); }
+  }
+
   async function addColumn(e) {
     e.preventDefault();
     setErr('');
@@ -39,19 +80,34 @@ export default function SchemaStudio() {
     } catch (ex) { setErr(ex.message); }
   }
 
+  const hasId = rows && rows[0] && Object.prototype.hasOwnProperty.call(rows[0], 'id');
+  const toggle = (id) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const toggleAll = () => {
+    if (!hasId) return;
+    const ids = rows.map((r) => r.id);
+    setSelected(selected.length === ids.length ? [] : ids);
+  };
+
   return (
     <div>
       <h1 className="page-title">Schema Studio</h1>
-      <p className="muted">Add columns or run SELECT. DELETE, DROP and TRUNCATE are blocked from the frontend.</p>
+      <p className="muted">Select a table to view or delete its data. DROP / TRUNCATE stay blocked; DELETE is logged in Activity.</p>
       {err && <div className="alert alert-err">{err}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="grid grid-2" style={{ marginTop: 16 }}>
         <div className="card">
           <Field label="Table">
             <select className="select" value={table} onChange={(e) => setTable(e.target.value)}>
-              {tables.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+              {tables.map((t) => <option key={t.name} value={t.name}>{t.name} ({t.row_estimate || 0})</option>)}
             </select>
           </Field>
+          <div className="btn-row" style={{ marginBottom: 12 }}>
+            <button type="button" className="btn btn-gold" onClick={loadTableData}>Select table data</button>
+            <button type="button" className="btn btn-outline" onClick={deleteSelected} disabled={!selected.length}>Delete selected</button>
+            <button type="button" className="btn btn-danger" onClick={clearTableData}>Delete all table data</button>
+          </div>
           <table className="table">
             <thead><tr><th>Column</th><th>Type</th><th>Null</th></tr></thead>
             <tbody>{cols.map((c) => <tr key={c.name}><td>{c.name}</td><td>{c.type}</td><td>{c.nullable ? 'YES' : 'NO'}</td></tr>)}</tbody>
@@ -71,17 +127,34 @@ export default function SchemaStudio() {
           </form>
         </div>
         <div className="card">
-          <h3>Safe query</h3>
+          <h3>Query / DELETE</h3>
           <textarea className="textarea" rows={6} value={sql} onChange={(e) => setSql(e.target.value)} />
           <div className="btn-row" style={{ margin: '10px 0' }}>
             <button className="btn btn-gold" onClick={runQuery}>Run</button>
+            <button className="btn btn-outline" onClick={() => setSql(`DELETE FROM \`${table}\` WHERE id = 0`)}>Sample DELETE</button>
             <button className="btn btn-outline" onClick={() => setSql('DROP TABLE users')}>Try DROP (blocked)</button>
           </div>
           {rows && (
             <div style={{ overflow: 'auto' }}>
               <table className="table">
-                <thead><tr>{Object.keys(rows[0] || {}).map((k) => <th key={k}>{k}</th>)}</tr></thead>
-                <tbody>{rows.map((r, i) => <tr key={i}>{Object.values(r).map((v, j) => <td key={j}>{String(v)}</td>)}</tr>)}</tbody>
+                <thead>
+                  <tr>
+                    {hasId && <th><input type="checkbox" checked={selected.length > 0 && selected.length === rows.length} onChange={toggleAll} /></th>}
+                    {Object.keys(rows[0] || {}).map((k) => <th key={k}>{k}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.id ?? i}>
+                      {hasId && (
+                        <td>
+                          <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
+                        </td>
+                      )}
+                      {Object.values(r).map((v, j) => <td key={j}>{String(v)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           )}

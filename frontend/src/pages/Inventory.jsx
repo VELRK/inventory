@@ -3,14 +3,21 @@ import { useSearchParams } from 'react-router-dom';
 import { api, fmt, getUser } from '../api';
 import { Badge, Field, Modal, Pager, RowActions, confirmDelete } from '../components/ui';
 
-const statuses = ['', 'available', 'on_hold', 'blocked', 'booked', 'registered'];
+const statuses = ['', 'available', 'on_hold', 'booked', 'registered'];
 const blankUnit = { project_id: '', unit_no: '', block_phase: '', plot_type: 'Residential Plot', area_sqft: 1200, facing: 'East', road_width_ft: 30, dimensions: '30x40', price: 3600000, status: 'available', remarks: '' };
+const blankBook = {
+  customer_name: '', customer_phone: '', customer_email: '', company_id: '',
+  amount: '', booking_date: new Date().toISOString().slice(0, 10), status: 'confirmed', payment_status: 'partial', notes: '',
+};
 
 export default function Inventory() {
-  const admin = getUser()?.role === 'promoter_admin';
+  const me = getUser();
+  const admin = me?.role === 'promoter_admin';
+  const canBook = me?.role === 'promoter_admin' || me?.role === 'marketing_team_admin';
   const [params, setParams] = useSearchParams();
   const projectId = params.get('project_id') || '';
   const [projects, setProjects] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [data, setData] = useState({ items: [], stats: {}, total: 0, page: 1, pages: 1, limit: 10 });
   const [limit, setLimit] = useState(10);
   const [status, setStatus] = useState('');
@@ -19,9 +26,11 @@ export default function Inventory() {
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
   const [reqOpen, setReqOpen] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
   const [bulk, setBulk] = useState([]);
   const [form, setForm] = useState({ ...blankUnit, project_id: projectId });
   const [req, setReq] = useState({ customer_name: '', customer_phone: '', customer_email: '', expected_booking_date: '', remarks: '' });
+  const [book, setBook] = useState({ ...blankBook });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -31,6 +40,7 @@ export default function Inventory() {
   }
   useEffect(() => {
     api('/projects?limit=100').then((r) => setProjects(r.data.items || []));
+    if (admin) api('/companies?limit=100').then((r) => setCompanies(r.data.items || [])).catch(() => {});
     load(1);
   }, [projectId, status]);
 
@@ -77,7 +87,25 @@ export default function Inventory() {
     e.preventDefault();
     try {
       await api('/requests', { method: 'POST', body: { ...req, unit_id: detail.id } });
-      setReqOpen(false); setMsg('Block request submitted.'); load();
+      setReqOpen(false); setMsg('Hold request submitted.'); load();
+    } catch (ex) { setErr(ex.message); }
+  }
+  async function submitBook(e) {
+    e.preventDefault();
+    try {
+      await api('/bookings', {
+        method: 'POST',
+        body: {
+          ...book,
+          unit_id: detail.id,
+          amount: book.amount || detail.price,
+          company_id: book.company_id || me?.company_id || '',
+        },
+      });
+      setBookOpen(false);
+      setDetail(null);
+      setMsg('Booking created.');
+      load();
     } catch (ex) { setErr(ex.message); }
   }
   async function bulkUpdate() {
@@ -88,6 +116,8 @@ export default function Inventory() {
   }
 
   const stats = data.stats || {};
+  const bookable = detail && (detail.status === 'available' || detail.status === 'on_hold');
+
   return (
     <div>
       <div className="toolbar">
@@ -103,8 +133,8 @@ export default function Inventory() {
       {err && <div className="alert alert-err">{err}</div>}
       {msg && <div className="alert alert-ok">{msg}</div>}
       <div className="grid grid-5" style={{ marginBottom: 16 }}>
-        {['total','available','blocked','booked','registered'].map((k) => (
-          <div key={k} className="card stat"><div className="k">{k}</div><div className="v">{stats[k] || 0}</div></div>
+        {['total', 'available', 'on_hold', 'booked', 'registered'].map((k) => (
+          <div key={k} className="card stat"><div className="k">{k.replace('_', ' ')}</div><div className="v">{stats[k] || 0}</div></div>
         ))}
       </div>
       <div className="chips">
@@ -179,17 +209,27 @@ export default function Inventory() {
           <p className="price">{fmt(detail.price)}</p>
           <p className="muted">{detail.area_sqft} sq.ft · {detail.facing} · {detail.dimensions} · {detail.approval_details}</p>
           <p>{detail.remarks}</p>
-          {admin && (
-            <div className="btn-row" style={{ marginTop: 12 }}>
-              <button className="btn btn-outline" onClick={() => { setDetail(null); openEdit(detail); }}>Edit</button>
-              <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>
-            </div>
-          )}
-          {!admin && detail.status === 'available' && <button className="btn btn-gold" onClick={() => setReqOpen(true)}>Request to Block</button>}
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            {admin && (
+              <>
+                <button className="btn btn-outline" onClick={() => { setDetail(null); openEdit(detail); }}>Edit</button>
+                <button className="btn btn-danger" onClick={() => { setDetail(null); remove(detail); }}>Delete</button>
+              </>
+            )}
+            {canBook && bookable && (
+              <button className="btn btn-gold" onClick={() => {
+                setBook({ ...blankBook, amount: detail.price, company_id: me?.company_id || '' });
+                setBookOpen(true);
+              }}>Book unit</button>
+            )}
+            {!admin && detail.status === 'available' && (
+              <button className="btn btn-outline" onClick={() => setReqOpen(true)}>Request hold</button>
+            )}
+          </div>
         </Modal>
       )}
       {reqOpen && detail && (
-        <Modal title={`Request to block ${detail.unit_no}`} onClose={() => setReqOpen(false)}>
+        <Modal title={`Request hold · ${detail.unit_no}`} onClose={() => setReqOpen(false)}>
           <form onSubmit={submitRequest} className="grid">
             <Field label="Customer name"><input className="input" value={req.customer_name} onChange={(e) => setReq({ ...req, customer_name: e.target.value })} /></Field>
             <Field label="Phone"><input className="input" value={req.customer_phone} onChange={(e) => setReq({ ...req, customer_phone: e.target.value })} /></Field>
@@ -197,6 +237,31 @@ export default function Inventory() {
             <Field label="Expected booking date"><input className="input" type="date" value={req.expected_booking_date} onChange={(e) => setReq({ ...req, expected_booking_date: e.target.value })} /></Field>
             <Field label="Remarks"><textarea className="textarea" rows={3} value={req.remarks} onChange={(e) => setReq({ ...req, remarks: e.target.value })} /></Field>
             <button className="btn btn-gold">Submit Request</button>
+          </form>
+        </Modal>
+      )}
+      {bookOpen && detail && (
+        <Modal title={`Book ${detail.unit_no}`} onClose={() => setBookOpen(false)}>
+          <form onSubmit={submitBook} className="grid">
+            <Field label="Customer name"><input className="input" required value={book.customer_name} onChange={(e) => setBook({ ...book, customer_name: e.target.value })} /></Field>
+            <div className="grid grid-2">
+              <Field label="Phone"><input className="input" value={book.customer_phone} onChange={(e) => setBook({ ...book, customer_phone: e.target.value })} /></Field>
+              <Field label="Email"><input className="input" value={book.customer_email} onChange={(e) => setBook({ ...book, customer_email: e.target.value })} /></Field>
+            </div>
+            <div className="grid grid-2">
+              <Field label="Amount"><input className="input" type="number" value={book.amount} onChange={(e) => setBook({ ...book, amount: e.target.value })} /></Field>
+              <Field label="Booking date"><input className="input" type="date" value={book.booking_date} onChange={(e) => setBook({ ...book, booking_date: e.target.value })} /></Field>
+            </div>
+            {admin && (
+              <Field label="Company">
+                <select className="select" value={book.company_id} onChange={(e) => setBook({ ...book, company_id: e.target.value })}>
+                  <option value="">None</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Notes"><textarea className="textarea" rows={2} value={book.notes} onChange={(e) => setBook({ ...book, notes: e.target.value })} /></Field>
+            <button className="btn btn-gold">Confirm booking</button>
           </form>
         </Modal>
       )}

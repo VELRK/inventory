@@ -21,7 +21,7 @@ class Project_model extends CI_Model
 			->where('deleted_at IS NULL', null, false)
 			->group_by('status')
 			->get()->result();
-		$counts = array('available' => 0, 'on_hold' => 0, 'blocked' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
+		$counts = array('available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
 		foreach ($stats as $s) {
 			$counts[$s->status] = (int) $s->cnt;
 			$counts['total'] += (int) $s->cnt;

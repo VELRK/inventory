@@ -143,14 +143,18 @@ class Schema_studio extends Api_Controller
 			$this->_log('-', 'QUERY', $sql, 'blocked', $reason);
 			$this->api_response->error('BLOCKED', $reason, 403);
 		}
-		$normalized = strtoupper(ltrim($sql));
-		if (strpos($normalized, 'SELECT') !== 0 && strpos($normalized, 'SHOW') !== 0 && strpos($normalized, 'DESCRIBE') !== 0 && strpos($normalized, 'EXPLAIN') !== 0 && strpos($normalized, 'ALTER TABLE') !== 0) {
-			$this->_log('-', 'QUERY', $sql, 'blocked', 'Only SELECT/SHOW/DESCRIBE/EXPLAIN/ALTER ADD COLUMN are allowed.');
-			$this->api_response->error('BLOCKED', 'Only SELECT, SHOW, DESCRIBE, EXPLAIN, or ALTER ADD COLUMN are allowed from the frontend.', 403);
+		if (!$this->schema_guard->is_allowed_query($sql)) {
+			$this->_log('-', 'QUERY', $sql, 'blocked', 'Only SELECT/SHOW/DESCRIBE/EXPLAIN/ALTER ADD COLUMN/DELETE are allowed.');
+			$this->api_response->error('BLOCKED', 'Only SELECT, SHOW, DESCRIBE, EXPLAIN, ALTER ADD COLUMN, or DELETE FROM are allowed.', 403);
 		}
+		$normalized = strtoupper(ltrim($sql));
 		if (strpos($normalized, 'ALTER TABLE') === 0 && !preg_match('/ALTER\s+TABLE\s+.+ADD\s+(COLUMN\s+)?/i', $sql)) {
 			$this->_log('-', 'QUERY', $sql, 'blocked', 'ALTER is limited to ADD COLUMN.');
-			$this->api_response->error('BLOCKED', 'ALTER is limited to ADD COLUMN. DROP/TRUNCATE/DELETE are blocked.', 403);
+			$this->api_response->error('BLOCKED', 'ALTER is limited to ADD COLUMN. DROP/TRUNCATE are blocked.', 403);
+		}
+		if ($this->schema_guard->is_delete_query($sql) && !preg_match('/^\s*DELETE\s+FROM\s+`?[A-Za-z0-9_]+`?/i', $sql)) {
+			$this->_log('-', 'QUERY', $sql, 'blocked', 'Invalid DELETE.');
+			$this->api_response->error('BLOCKED', 'DELETE must be DELETE FROM table [WHERE ...].', 403);
 		}
 		try {
 			$query = $this->db->query($sql);
@@ -160,11 +164,54 @@ class Schema_studio extends Api_Controller
 				$this->_log('-', 'QUERY', $sql, 'failed', $msg);
 				$this->api_response->error('SQL_ERROR', $msg, 400);
 			}
+			if ($this->schema_guard->is_delete_query($sql)) {
+				$affected = (int) $this->db->affected_rows();
+				$this->_log('-', 'DELETE', $sql, 'success', $affected . ' rows deleted');
+				$this->log_activity('schema.delete_data', 'Deleted table data via SQL (' . $affected . ' rows)', 'schema', 0, array('sql' => $sql, 'affected' => $affected));
+				$this->api_response->ok(array('rows' => array(), 'count' => 0, 'affected' => $affected), $affected . ' row(s) deleted.');
+			}
 			$rows = is_object($query) ? $query->result_array() : array();
 			$this->_log('-', 'QUERY', $sql, 'success', 'OK');
 			$this->api_response->ok(array('rows' => $rows, 'count' => count($rows)));
 		} catch (Exception $e) {
 			$this->_log('-', 'QUERY', $sql, 'failed', $e->getMessage());
+			$this->api_response->error('SQL_ERROR', $e->getMessage(), 400);
+		}
+	}
+
+	public function delete_data()
+	{
+		$table = request_value('table');
+		$ids = request_value('ids');
+		$where = request_value('where', '');
+		$confirm = (bool) request_value('confirm', false);
+		list($ok, $sql_or_err) = $this->schema_guard->build_delete_data($table, $ids, $where);
+		if (!$ok) {
+			$this->api_response->error('VALIDATION', $sql_or_err, 400);
+		}
+		$clear_all = empty($ids) && trim((string) $where) === '';
+		if ($clear_all && !$confirm) {
+			$this->api_response->error('CONFIRM_REQUIRED', 'Set confirm=true to delete all rows from ' . $table . '.', 400);
+		}
+		list($safe, $reason) = $this->schema_guard->assert_safe($sql_or_err);
+		if (!$safe) {
+			$this->_log($table, 'DELETE', $sql_or_err, 'blocked', $reason);
+			$this->api_response->error('BLOCKED', $reason, 403);
+		}
+		try {
+			$this->db->query($sql_or_err);
+			$affected = (int) $this->db->affected_rows();
+			$this->_log($table, 'DELETE', $sql_or_err, 'success', $affected . ' rows deleted');
+			$this->log_activity(
+				'schema.delete_data',
+				'Deleted ' . $affected . ' row(s) from ' . $table,
+				'schema',
+				0,
+				array('table' => $table, 'affected' => $affected, 'sql' => $sql_or_err)
+			);
+			$this->api_response->ok(array('table' => $table, 'affected' => $affected, 'sql' => $sql_or_err), $affected . ' row(s) deleted from ' . $table . '.');
+		} catch (Exception $e) {
+			$this->_log($table, 'DELETE', $sql_or_err, 'failed', $e->getMessage());
 			$this->api_response->error('SQL_ERROR', $e->getMessage(), 400);
 		}
 	}

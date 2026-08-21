@@ -12,7 +12,9 @@ const blankReg = {
 };
 
 export default function Reports() {
-  const admin = getUser()?.role === 'promoter_admin';
+  const me = getUser();
+  const admin = me?.role === 'promoter_admin';
+  const canBook = admin || me?.role === 'marketing_team_admin';
   const [type, setType] = useState('bookings');
   const [filters, setFilters] = useState({ company_id: '', project_id: '', status: '', from: '', to: '' });
   const [opts, setOpts] = useState({ companies: [], projects: [] });
@@ -31,9 +33,19 @@ export default function Reports() {
   };
   useEffect(() => {
     api('/reports/filters').then((r) => setOpts(r.data)).catch(() => {});
-    api('/inventory?limit=100').then((r) => setUnits(r.data.items || [])).catch(() => {});
+    api('/inventory?limit=100&status=available').then((r) => setUnits(r.data.items || [])).catch(() => {});
+    api('/inventory?limit=100&status=on_hold').then((r) => {
+      setUnits((prev) => {
+        const map = {};
+        [...prev, ...(r.data.items || [])].forEach((u) => { map[u.id] = u; });
+        return Object.values(map);
+      });
+    }).catch(() => {});
   }, []);
-  useEffect(() => { load(1); }, [type]);
+  useEffect(() => {
+    if (!admin && type === 'registrations') setType('bookings');
+    else load(1);
+  }, [type]);
 
   const endpoint = type === 'bookings' ? '/bookings' : '/registrations';
   const label = type === 'bookings' ? 'booking' : 'registration';
@@ -86,7 +98,9 @@ export default function Reports() {
     <div>
       <div className="toolbar">
         <h1 className="page-title" style={{ marginRight: 'auto' }}>Bookings & Registrations</h1>
-        {admin && <button className="btn btn-gold" onClick={openAdd}>+ Add {type === 'bookings' ? 'Booking' : 'Registration'}</button>}
+        {canBook && (type === 'bookings' || admin) && (
+          <button className="btn btn-gold" onClick={openAdd}>+ Add {type === 'bookings' ? 'Booking' : 'Registration'}</button>
+        )}
       </div>
       {err && <div className="alert alert-err">{err}</div>}
       <div className="card" style={{ margin: '16px 0' }}>
@@ -120,7 +134,7 @@ export default function Reports() {
       </div>
       <div className="tabs" style={{ marginTop: 18 }}>
         <button className={`tab ${type==='bookings'?'active':''}`} onClick={() => setType('bookings')}>Bookings ({stats.total_bookings || 0})</button>
-        <button className={`tab ${type==='registrations'?'active':''}`} onClick={() => setType('registrations')}>Registrations ({stats.total_registrations || 0})</button>
+        {admin && <button className={`tab ${type==='registrations'?'active':''}`} onClick={() => setType('registrations')}>Registrations ({stats.total_registrations || 0})</button>}
       </div>
       {(data?.items || []).map((row) => (
         <div key={row.id} className="list-card">
@@ -134,7 +148,9 @@ export default function Reports() {
             <div className="price" style={{ fontSize: 16 }}>{fmt(row.amount)}</div>
             <div className="muted">{row.booking_date || row.registration_date}</div>
             <Badge status={row.status} />
-            {admin && <RowActions onEdit={() => openEdit(row)} onDelete={() => remove(row)} />}
+            {((type === 'bookings' && canBook) || (type === 'registrations' && admin)) && (
+              <RowActions onEdit={() => openEdit(row)} onDelete={() => remove(row)} />
+            )}
           </div>
         </div>
       ))}

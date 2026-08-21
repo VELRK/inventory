@@ -22,20 +22,31 @@ class Bookings extends Api_Controller
 			));
 		}
 		if ($method === 'POST') {
-			$this->require_roles(array('promoter_admin'));
+			$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 			$unit_id = (int) request_value('unit_id');
 			$unit = $this->inventory_model->find($unit_id);
 			if (!$unit) {
 				$this->api_response->error('NOT_FOUND', 'Unit not found.', 404);
 			}
+			if (!in_array($unit->status, array('available', 'on_hold'), true)) {
+				$this->api_response->error('UNIT_NOT_BOOKABLE', 'Only available or on-hold units can be booked.', 409);
+			}
+			$allowed = $this->allowed_project_ids();
+			if ($allowed !== null && !in_array((int) $unit->project_id, $allowed, true)) {
+				$this->api_response->error('FORBIDDEN', 'This unit is not assigned to you.', 403);
+			}
 			$name = trim((string) request_value('customer_name'));
 			if ($name === '') {
 				$this->api_response->validation(array('customer_name' => 'Customer name is required.'));
 			}
+			$company_id = request_value('company_id');
+			if ($this->is_team_admin()) {
+				$company_id = $this->company_id();
+			}
 			$this->db->insert('bookings', array(
 				'unit_id' => $unit_id,
 				'project_id' => $unit->project_id,
-				'company_id' => request_value('company_id') ?: null,
+				'company_id' => $company_id ?: null,
 				'customer_name' => $name,
 				'customer_phone' => request_value('customer_phone'),
 				'customer_email' => request_value('customer_email'),
@@ -49,7 +60,7 @@ class Bookings extends Api_Controller
 			));
 			$id = $this->db->insert_id();
 			$this->inventory_model->set_status($unit_id, 'booked');
-			$company = request_value('company_id') ? $this->db->get_where('marketing_companies', array('id' => request_value('company_id')))->row() : null;
+			$company = $company_id ? $this->db->get_where('marketing_companies', array('id' => $company_id))->row() : null;
 			$to = $company ? $company->email : $this->setting_model->get('mail_from_email');
 			$this->mailer->notify_event('booking.created', $to, array(
 				'customer' => $name,
@@ -64,21 +75,28 @@ class Bookings extends Api_Controller
 
 	public function item($id)
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 		$row = $this->booking_model->find($id);
 		if (!$row) {
 			$this->api_response->error('NOT_FOUND', 'Booking not found.', 404);
+		}
+		if ($this->is_team_admin() && (int) $row->company_id !== (int) $this->company_id()) {
+			$this->api_response->error('FORBIDDEN', 'You can only manage your company bookings.', 403);
 		}
 		$method = $this->http_method();
 		if ($method === 'GET') {
 			$this->api_response->ok($this->booking_model->decorate($row));
 		}
 		if ($method === 'PUT' || $method === 'POST') {
+			$company_id = request_value('company_id', $row->company_id);
+			if ($this->is_team_admin()) {
+				$company_id = $this->company_id();
+			}
 			$this->db->where('id', (int) $id)->update('bookings', array(
 				'customer_name' => request_value('customer_name', $row->customer_name),
 				'customer_phone' => request_value('customer_phone', $row->customer_phone),
 				'customer_email' => request_value('customer_email', $row->customer_email),
-				'company_id' => request_value('company_id', $row->company_id) ?: null,
+				'company_id' => $company_id ?: null,
 				'booking_date' => request_value('booking_date', $row->booking_date),
 				'status' => request_value('status', $row->status),
 				'payment_status' => request_value('payment_status', $row->payment_status),
@@ -103,7 +121,7 @@ class Bookings extends Api_Controller
 
 	public function export()
 	{
-		$this->require_roles(array('promoter_admin'));
+		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 		list($items) = $this->booking_model->list_filtered($this->_filters(), 1000, 0);
 		$rows = array();
 		foreach ($items as $item) {

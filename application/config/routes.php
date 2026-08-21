@@ -64,6 +64,7 @@ $route['api/schema/columns'] = 'api/schema_studio/columns';
 $route['api/schema/add-column'] = 'api/schema_studio/add_column';
 $route['api/schema/query'] = 'api/schema_studio/query';
 $route['api/schema/logs'] = 'api/schema_studio/logs';
+$route['api/schema/delete-data'] = 'api/schema_studio/delete_data';
 
 $route['api/docs'] = 'api/docs/index';
 $route['api/docs/catalog'] = 'api/docs/catalog';

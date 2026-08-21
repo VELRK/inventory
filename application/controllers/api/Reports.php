@@ -7,7 +7,7 @@ class Reports extends Api_Controller
 	{
 		parent::__construct();
 		$this->load->model(array('booking_model', 'registration_model', 'company_model', 'project_model'));
-		$this->require_roles(array('promoter_admin'));
+		$this->require_roles(array('promoter_admin', 'marketing_team_admin'));
 	}
 
 	public function index()
@@ -21,7 +21,13 @@ class Reports extends Api_Controller
 			'to' => request_value('to'),
 			'q' => request_value('q')
 		);
+		if ($this->is_team_admin()) {
+			$filters['company_id'] = $this->company_id();
+		}
 		$type = request_value('type', 'bookings');
+		if ($type === 'registrations' && !$this->is_admin()) {
+			$this->api_response->error('FORBIDDEN', 'Only promoter admin can manage registrations.', 403);
+		}
 		list($page, $limit, $offset) = pagination_params();
 
 		if ($type === 'registrations') {
@@ -58,8 +64,23 @@ class Reports extends Api_Controller
 
 	public function filters()
 	{
-		$companies = $this->db->select('id, name')->where('deleted_at IS NULL', null, false)->get('marketing_companies')->result();
-		$projects = $this->db->select('id, name, city')->where('deleted_at IS NULL', null, false)->get('projects')->result();
+		if ($this->is_team_admin()) {
+			$companies = $this->db->select('id, name')->where('id', $this->company_id())->where('deleted_at IS NULL', null, false)->get('marketing_companies')->result();
+			$allowed = $this->allowed_project_ids();
+			$this->db->select('id, name, city')->where('deleted_at IS NULL', null, false);
+			if ($allowed !== null) {
+				if (empty($allowed)) {
+					$projects = array();
+				} else {
+					$projects = $this->db->where_in('id', $allowed)->get('projects')->result();
+				}
+			} else {
+				$projects = $this->db->get('projects')->result();
+			}
+		} else {
+			$companies = $this->db->select('id, name')->where('deleted_at IS NULL', null, false)->get('marketing_companies')->result();
+			$projects = $this->db->select('id, name, city')->where('deleted_at IS NULL', null, false)->get('projects')->result();
+		}
 		$this->api_response->ok(array(
 			'companies' => $companies,
 			'projects' => $projects,
@@ -71,6 +92,9 @@ class Reports extends Api_Controller
 	public function export()
 	{
 		$type = request_value('type', 'bookings');
+		if ($type === 'registrations' && !$this->is_admin()) {
+			$this->api_response->error('FORBIDDEN', 'Only promoter admin can export registrations.', 403);
+		}
 		$filters = array(
 			'company_id' => request_value('company_id'),
 			'project_id' => request_value('project_id'),
@@ -79,6 +103,9 @@ class Reports extends Api_Controller
 			'from' => request_value('from'),
 			'to' => request_value('to')
 		);
+		if ($this->is_team_admin()) {
+			$filters['company_id'] = $this->company_id();
+		}
 		if ($type === 'registrations') {
 			list($items) = $this->registration_model->list_filtered($filters, 2000, 0);
 			$date_key = 'registration_date';

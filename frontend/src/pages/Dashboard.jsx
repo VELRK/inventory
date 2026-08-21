@@ -31,7 +31,7 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-2">
           <div className="card stat"><div className="k" style={{ color: 'var(--success)' }}>Available</div><div className="v">{inv.available}</div></div>
-          <div className="card stat"><div className="k" style={{ color: 'var(--warning)' }}>Blocked</div><div className="v">{inv.blocked}</div></div>
+          <div className="card stat"><div className="k" style={{ color: 'var(--warning)' }}>On Hold</div><div className="v">{inv.on_hold}</div></div>
           <div className="card stat"><div className="k" style={{ color: 'var(--teal)' }}>Booked</div><div className="v">{inv.booked}</div></div>
           <div className="card stat"><div className="k" style={{ color: 'var(--registered)' }}>Registered</div><div className="v">{inv.registered}</div></div>
         </div>
@@ -63,7 +63,7 @@ export default function Dashboard() {
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="available" fill="#28a745" />
-                <Bar dataKey="blocked" fill="#e8a317" />
+                <Bar dataKey="on_hold" fill="#e8a317" />
                 <Bar dataKey="booked" fill="#1f6f6d" />
                 <Bar dataKey="registered" fill="#5b4b8a" />
               </BarChart>

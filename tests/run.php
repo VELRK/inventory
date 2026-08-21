@@ -24,11 +24,14 @@ define('BASEPATH', 'test');
 require $root . '/application/libraries/Schema_guard.php';
 $g = new Schema_guard();
 
-assert_true($g->is_blocked('DELETE FROM users') === 'DELETE', 'blocks DELETE');
+assert_true($g->is_blocked('DELETE FROM users') === false, 'allows DELETE data');
 assert_true($g->is_blocked('DROP TABLE users') === 'DROP', 'blocks DROP');
 assert_true($g->is_blocked('TRUNCATE TABLE users') === 'TRUNCATE', 'blocks TRUNCATE');
 assert_true($g->is_blocked('ALTER TABLE projects DROP COLUMN name') !== false, 'blocks ALTER DROP');
 assert_true($g->is_blocked('SELECT * FROM projects') === false, 'allows SELECT');
+assert_true($g->is_delete_query('DELETE FROM projects WHERE id=1') === true, 'detects DELETE');
+list($okDel, $delSql) = $g->build_delete_data('projects', array(1, 2));
+assert_true($okDel === true && strpos($delSql, 'IN (1,2)') !== false, 'builds DELETE by ids');
 list($ok, $sql) = $g->build_add_column('projects', 'rera_no', 'VARCHAR', '50', true, null, null);
 assert_true($ok === true && strpos($sql, 'ADD COLUMN `rera_no` VARCHAR(50) NULL') !== false, 'builds ADD COLUMN SQL');
 list($bad) = $g->build_add_column('projects', 'x', 'BLOB', '', true, null, null);
@@ -95,11 +98,14 @@ assert_true($code === 200 && isset($json['data']['stats']), 'GET /inventory');
 list($code, $json) = api('GET', '/settings/credentials', null, $token);
 assert_true($code === 200 && $json['data'][0]['email'] === 'admin@syncr.test', 'GET credentials');
 
-list($code, $json) = api('POST', '/schema/query', array('sql' => 'DELETE FROM users'), $token);
-assert_true($code === 403 && $json['error']['code'] === 'BLOCKED', 'schema blocks DELETE');
+list($code, $json) = api('POST', '/schema/query', array('sql' => 'DROP TABLE users'), $token);
+assert_true($code === 403 && $json['error']['code'] === 'BLOCKED', 'schema blocks DROP');
 
 list($code, $json) = api('POST', '/schema/query', array('sql' => 'SELECT id, name FROM projects LIMIT 1'), $token);
 assert_true($code === 200 && isset($json['data']['rows']), 'schema allows SELECT');
+
+list($code, $json) = api('POST', '/schema/delete-data', array('table' => 'schema_change_logs', 'ids' => array(-1)), $token);
+assert_true($code === 200 && isset($json['data']['affected']), 'schema delete-data by ids');
 
 list($code, $json) = api('POST', '/projects', array('name' => 'CRUD Test Park', 'city' => 'Chennai', 'location' => 'OMR'), $token);
 assert_true($code === 201 && !empty($json['data']['id']), 'POST /projects create');

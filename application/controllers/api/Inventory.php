@@ -122,7 +122,7 @@ class Inventory extends Api_Controller
 		if (!is_array($ids) || empty($ids)) {
 			$this->api_response->validation(array('ids' => 'Select at least one unit.'));
 		}
-		$allowed_status = array('available', 'on_hold', 'blocked', 'booked', 'registered');
+		$allowed_status = array('available', 'on_hold', 'booked', 'registered');
 		if ($action === 'change_status' && !in_array($status, $allowed_status, true)) {
 			$this->api_response->validation(array('status' => 'Invalid status.'));
 		}

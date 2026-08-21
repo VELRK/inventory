@@ -73,7 +73,16 @@ class Users extends Api_Controller
 			}
 
 			$phone = trim((string) request_any(array('phone', 'mobile', 'mobile_number'), ''));
-			$avatar = trim((string) request_any(array('avatar', 'avatar_path', 'photo'), ''));
+			$avatarRaw = trim((string) request_any(array('avatar', 'avatar_path', 'photo', 'avatar_base64', 'avatarBase64'), ''));
+			$avatar = null;
+			if ($avatarRaw !== '') {
+				$err = null;
+				$stored = store_image_input($avatarRaw, 'users', $err);
+				if ($stored === false) {
+					$this->api_response->validation(array('avatar' => $err ?: 'Invalid avatar image.'));
+				}
+				$avatar = $stored;
+			}
 			$status = (string) request_value('status', 'active');
 			if (!in_array($status, array('active', 'inactive'), true)) {
 				$this->api_response->validation(array('status' => 'Status must be active or inactive.'));
@@ -85,7 +94,7 @@ class Users extends Api_Controller
 				'email' => $email,
 				'password_hash' => password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT),
 				'phone' => $phone !== '' ? $phone : null,
-				'avatar' => $avatar !== '' ? $avatar : null,
+				'avatar' => $avatar,
 				'role' => $role,
 				'status' => $status,
 				'created_at' => now_dt()
@@ -187,8 +196,24 @@ class Users extends Api_Controller
 					$data['phone'] = request_value('phone', $user->phone);
 				}
 			}
-			if (array_key_exists('avatar', $body)) {
-				$data['avatar'] = $body['avatar'] !== '' ? $body['avatar'] : null;
+			if (array_key_exists('avatar', $body) || array_key_exists('avatarBase64', $body) || array_key_exists('avatar_base64', $body)) {
+				$rawAvatar = '';
+				foreach (array('avatar', 'avatar_base64', 'avatarBase64') as $k) {
+					if (array_key_exists($k, $body) && $body[$k] !== null) {
+						$rawAvatar = (string) $body[$k];
+						break;
+					}
+				}
+				if (trim($rawAvatar) === '') {
+					$data['avatar'] = null;
+				} else {
+					$err = null;
+					$stored = store_image_input($rawAvatar, 'users', $err);
+					if ($stored === false) {
+						$this->api_response->validation(array('avatar' => $err ?: 'Invalid avatar image.'));
+					}
+					$data['avatar'] = $stored;
+				}
 			}
 			// Password is optional on update — leave blank to keep the current password.
 			$password = request_any(array('password', 'new_password', 'newPassword'), null);

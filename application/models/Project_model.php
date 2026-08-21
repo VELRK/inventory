@@ -38,8 +38,14 @@ class Project_model extends CI_Model
 			'contact_name' => $project->contact_name,
 			'contact_phone' => $project->contact_phone,
 			'contact_email' => $project->contact_email,
-			'cover_image' => $project->cover_image,
-			'cover_image_url' => media_url($project->cover_image),
+			'cover_image' => (isset($project->cover_image) && stripos((string) $project->cover_image, 'data:') === 0)
+				? null
+				: $project->cover_image,
+			'cover_image_url' => media_url(
+				(isset($project->cover_image) && stripos((string) $project->cover_image, 'data:') === 0)
+					? null
+					: $project->cover_image
+			),
 			'status' => $project->status,
 			'counts' => $counts,
 			'images' => $images,

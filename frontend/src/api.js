@@ -95,6 +95,7 @@ export function validateImageFile(file) {
 export function fileUrl(path) {
   if (!path) return '';
   const raw = String(path);
+  if (/^data:/i.test(raw)) return '';
   if (/^https?:\/\//i.test(raw)) {
     try {
       const u = new URL(raw);

@@ -203,10 +203,110 @@ function media_url($path)
 	if ($path === null || $path === '') {
 		return null;
 	}
+	$path = trim((string) $path);
+	// Never treat base64 / data-URIs as file paths (Flutter sometimes posts these).
+	if (stripos($path, 'data:') === 0 || preg_match('#^[A-Za-z0-9+/]{80,}={0,2}$#', $path)) {
+		return null;
+	}
 	if (preg_match('#^https?://#i', $path)) {
 		return $path;
 	}
 	return rtrim(public_base_url(), '/') . '/' . ltrim($path, '/');
+}
+
+/**
+ * Normalize an image field from API clients:
+ * - empty → null
+ * - uploads/... path → keep
+ * - https URL under /uploads/ → extract relative path when possible
+ * - data:image/...;base64,... → decode, save under uploads/{folder}/, return path
+ * Returns relative path like uploads/projects/foo.jpg, or null.
+ * On invalid base64 payload, sets $error and returns false.
+ */
+function store_image_input($value, $folder = 'projects', &$error = null)
+{
+	$error = null;
+	$value = is_string($value) ? trim($value) : '';
+	if ($value === '') {
+		return null;
+	}
+
+	$folder = preg_replace('/[^a-z0-9_-]/i', '', strtolower((string) $folder));
+	if ($folder === '') {
+		$folder = 'projects';
+	}
+
+	// Already a stored relative path.
+	if (preg_match('#^uploads/[a-z0-9_-]+/#i', $value) && stripos($value, 'data:') === false) {
+		return $value;
+	}
+
+	// Absolute URL pointing at our uploads folder → keep relative path.
+	if (preg_match('#^https?://#i', $value)) {
+		if (preg_match('#(/uploads/[a-z0-9_-]+/[^?\s]+)#i', $value, $m)) {
+			return ltrim($m[1], '/');
+		}
+		// External URL — store as-is only if short enough for VARCHAR(255).
+		if (strlen($value) <= 255) {
+			return $value;
+		}
+		$error = 'Image URL is too long. Upload the file via /api/upload instead.';
+		return false;
+	}
+
+	$ext = 'jpg';
+	$raw = null;
+	if (preg_match('#^data:image/(jpeg|jpg|png|webp);base64,#i', $value, $m)) {
+		$extMap = array('jpeg' => 'jpg', 'jpg' => 'jpg', 'png' => 'png', 'webp' => 'webp');
+		$key = strtolower($m[1]);
+		$ext = isset($extMap[$key]) ? $extMap[$key] : 'jpg';
+		$raw = base64_decode(substr($value, strpos($value, ',') + 1), true);
+	} elseif (preg_match('#^[A-Za-z0-9+/=\r\n]+$#', $value) && strlen($value) > 200) {
+		$raw = base64_decode($value, true);
+	} else {
+		// Unknown string that is not a path — do not store (avoids truncated base64 in DB).
+		$error = 'Invalid cover_image. Send uploads/... path from /api/upload, or a data:image/...;base64, payload.';
+		return false;
+	}
+
+	if ($raw === false || $raw === '') {
+		$error = 'Could not decode image base64. Re-upload a JPG, PNG, or WEBP (max 4 MB).';
+		return false;
+	}
+	$max = 4 * 1024 * 1024;
+	if (strlen($raw) > $max) {
+		$error = 'Image is too large after decode. Maximum size is 4 MB.';
+		return false;
+	}
+
+	$info = @getimagesizefromstring($raw);
+	if ($info === false) {
+		$error = 'Decoded data is not a valid image. Use JPG, PNG, or WEBP.';
+		return false;
+	}
+	if (!empty($info['mime'])) {
+		$mimeExt = array('image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp');
+		if (isset($mimeExt[$info['mime']])) {
+			$ext = $mimeExt[$info['mime']];
+		} elseif (!isset($mimeExt[$info['mime']])) {
+			$error = 'Unsupported image type (' . $info['mime'] . '). Use JPG, PNG, or WEBP.';
+			return false;
+		}
+	}
+
+	$dir = FCPATH . 'uploads' . DIRECTORY_SEPARATOR . $folder . DIRECTORY_SEPARATOR;
+	if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+		$error = 'Upload folder could not be created: uploads/' . $folder;
+		return false;
+	}
+	$name = $folder . '_cover_' . date('YmdHis') . '_' . substr(md5($raw), 0, 8) . '.' . $ext;
+	$dest = $dir . $name;
+	if (@file_put_contents($dest, $raw) === false) {
+		$error = 'Could not save image on the server.';
+		return false;
+	}
+	@chmod($dest, 0644);
+	return 'uploads/' . $folder . '/' . $name;
 }
 
 /**

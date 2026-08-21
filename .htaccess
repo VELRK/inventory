@@ -4,6 +4,9 @@ RewriteBase /inventory/
 
 # On Hostinger (superfinelabels.in/plots) GitHub Actions rewrites this to /plots/
 
+# Never send /uploads/* through CodeIgniter (missing files must 404, not API 400).
+RewriteRule ^uploads(/|$) - [L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php/$1 [L]

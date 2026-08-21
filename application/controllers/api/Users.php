@@ -190,8 +190,13 @@ class Users extends Api_Controller
 			if (array_key_exists('avatar', $body)) {
 				$data['avatar'] = $body['avatar'] !== '' ? $body['avatar'] : null;
 			}
-			$password = request_value('password');
-			if ($password) {
+			// Password is optional on update — leave blank to keep the current password.
+			$password = request_any(array('password', 'new_password', 'newPassword'), null);
+			if ($password !== null && $password !== '') {
+				$password = (string) $password;
+				if (strlen($password) < 6) {
+					$this->api_response->validation(array('password' => 'Password must be at least 6 characters (or leave blank to keep current).'));
+				}
 				$data['password_hash'] = password_hash($password, PASSWORD_BCRYPT);
 			}
 			$this->user_model->update_user($id, $data);

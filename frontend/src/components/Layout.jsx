@@ -4,7 +4,7 @@ import {
   Activity, Settings, Database, TerminalSquare, Bell, LogOut, KeyRound, Mail, Shield
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { api, can, clearSession, getUser, updateSessionUser } from '../api';
+import { api, can, clearSession, getUser, mediaPreview, updateSessionUser } from '../api';
 import { Field, ImageField, Modal } from './ui';
 
 const allNav = [
@@ -129,8 +129,8 @@ export default function Layout() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button className="icon-btn" type="button"><Bell size={18} />{unread > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, background: 'var(--gold)', borderRadius: 99 }} />}</button>
             <button type="button" className="avatar-btn" title="Change profile photo" onClick={openPhoto}>
-              {user?.avatar_url
-                ? <img className="avatar" src={user.avatar_url} alt={user?.name || 'Profile'} />
+              {mediaPreview(user?.avatar, user?.avatar_url)
+                ? <img className="avatar" src={mediaPreview(user?.avatar, user?.avatar_url)} alt={user?.name || 'Profile'} />
                 : <div className="avatar">{user?.initials}</div>}
             </button>
           </div>

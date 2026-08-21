@@ -42,9 +42,21 @@ export default function Projects() {
 
   async function save(e) {
     e.preventDefault();
+    setErr('');
     try {
-      if (editing) await api(`/projects/${editing.id}`, { method: 'PUT', body: form });
-      else await api('/projects', { method: 'POST', body: form });
+      const body = {
+        name: form.name,
+        city: form.city,
+        location: form.location,
+        project_type: form.project_type,
+        approval_details: form.approval_details,
+        description: form.description,
+        status: form.status || 'active',
+        // Optional — empty string clears; omit url-only fields
+        cover_image: form.cover_image || '',
+      };
+      if (editing) await api(`/projects/${editing.id}`, { method: 'PUT', body });
+      else await api('/projects', { method: 'POST', body });
       setOpen(false);
       load(editing ? data.page : 1);
     } catch (ex) { setErr(ex.message); }
@@ -95,11 +107,11 @@ export default function Projects() {
             <Field label="Approval"><input className="input" value={form.approval_details} onChange={(e) => setForm({ ...form, approval_details: e.target.value })} /></Field>
             <Field label="Description"><textarea className="textarea" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <ImageField
-              label="Cover image"
+              label="Cover image (optional)"
               folder="projects"
               path={form.cover_image}
               url={form.cover_image_url}
-              onUploaded={(d) => setForm({ ...form, cover_image: d.path, cover_image_url: d.url })}
+              onUploaded={(d) => setForm({ ...form, cover_image: d.path || '', cover_image_url: d.url || '' })}
               onClear={() => setForm({ ...form, cover_image: '', cover_image_url: '' })}
             />
             {editing && (

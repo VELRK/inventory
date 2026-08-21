@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, can, getUser, updateSessionUser } from '../api';
+import { api, can, getUser, mediaPreview, updateSessionUser } from '../api';
 import { Badge, Field, Modal, Pager, RowActions, confirmDelete, ImageField } from '../components/ui';
 
 export default function UsersPage() {
@@ -51,16 +51,25 @@ export default function UsersPage() {
     setErr('');
     setMsg('');
     try {
-      const body = { ...form };
-      if (!body.password) delete body.password;
-      if (!admin) body.company_id = me.company_id;
+      const body = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        role: form.role,
+        company_id: admin ? (form.company_id || null) : me.company_id,
+        status: form.status || 'active',
+        avatar: form.avatar || '',
+      };
+      // Password is never required — only send when admin sets a new one on edit.
+      if (editing && form.password && form.password.length >= 6) {
+        body.password = form.password;
+      }
       if (editing) {
         const r = await api(`/users/${editing.id}`, { method: 'PUT', body });
         if (editing.id === me.id) updateSessionUser(r.data);
         setOpen(false);
         load(data.page);
       } else {
-        delete body.password;
         const r = await api('/users', { method: 'POST', body });
         setOpen(false);
         setMsg(r.message || 'User created. Set-password link emailed.');
@@ -91,8 +100,8 @@ export default function UsersPage() {
       {msg && <div className="alert alert-ok">{msg}</div>}
       {data.items.map((u) => (
         <div key={u.id} className="list-card">
-          {u.avatar_url
-            ? <img className="avatar" src={u.avatar_url} alt="" />
+          {mediaPreview(u.avatar, u.avatar_url)
+            ? <img className="avatar" src={mediaPreview(u.avatar, u.avatar_url)} alt="" />
             : <div className="avatar">{u.initials}</div>}
           <div>
             <strong>{u.name}</strong>
@@ -112,21 +121,21 @@ export default function UsersPage() {
             <Field label="Name"><input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email"><input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!!editing} /></Field>
             {editing ? (
-              <Field label="New password (optional)">
-                <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
+              <Field label="New password (optional — leave blank to keep current)">
+                <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" minLength={6} />
               </Field>
             ) : (
               <p className="muted" style={{ margin: 0, gridColumn: '1 / -1' }}>
-                No password here — the user gets an email link to set their own password (valid 48 hours).
+                Password is not required — the user gets an email link to set their own password (valid 48 hours).
               </p>
             )}
             <Field label="Phone"><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <ImageField
-              label="Profile photo"
+              label="Profile photo (optional)"
               folder="users"
               path={form.avatar}
               url={form.avatar_url}
-              onUploaded={(d) => setForm({ ...form, avatar: d.path, avatar_url: d.url })}
+              onUploaded={(d) => setForm({ ...form, avatar: d.path || '', avatar_url: d.url || '' })}
               onClear={() => setForm({ ...form, avatar: '', avatar_url: '' })}
             />
             {admin && (

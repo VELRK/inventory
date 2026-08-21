@@ -1,10 +1,26 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+function is_multipart_request()
+{
+	$ct = '';
+	if (!empty($_SERVER['CONTENT_TYPE'])) {
+		$ct = (string) $_SERVER['CONTENT_TYPE'];
+	} elseif (!empty($_SERVER['HTTP_CONTENT_TYPE'])) {
+		$ct = (string) $_SERVER['HTTP_CONTENT_TYPE'];
+	}
+	return stripos($ct, 'multipart/form-data') !== false;
+}
+
 function json_body()
 {
 	static $cached = null;
 	if ($cached !== null) {
+		return $cached;
+	}
+	// Do not read php://input for multipart uploads — use $_POST / $_FILES instead.
+	if (is_multipart_request()) {
+		$cached = array();
 		return $cached;
 	}
 	$raw = file_get_contents('php://input');

@@ -84,6 +84,17 @@ class Projects extends Api_Controller
 
 	private function _payload($project = null)
 	{
+		$body = json_body();
+		// Cover image is optional. Empty string clears; omitted keeps existing on update.
+		if (array_key_exists('cover_image', $body)) {
+			$cover = trim((string) $body['cover_image']);
+			$cover = $cover !== '' ? $cover : null;
+		} else {
+			$cover = request_value('cover_image', $project ? $project->cover_image : null);
+			if ($cover === '') {
+				$cover = null;
+			}
+		}
 		return array(
 			'name' => trim((string) request_value('name', $project ? $project->name : '')),
 			'location' => trim((string) request_value('location', $project ? $project->location : '')),
@@ -94,7 +105,7 @@ class Projects extends Api_Controller
 			'contact_name' => request_value('contact_name', $project ? $project->contact_name : null),
 			'contact_phone' => request_value('contact_phone', $project ? $project->contact_phone : null),
 			'contact_email' => request_value('contact_email', $project ? $project->contact_email : null),
-			'cover_image' => request_value('cover_image', $project ? $project->cover_image : null),
+			'cover_image' => $cover,
 			'status' => request_value('status', $project ? $project->status : 'active')
 		);
 	}

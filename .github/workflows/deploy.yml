@@ -19,14 +19,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build React admin (base /plots/app/)
+      - name: Build frontend into /app (only production files)
         working-directory: frontend
         run: |
           npm ci
           npm run build
+          # Server layout: plots/app/ = Vite dist only (index.html, assets, .htaccess)
+          rm -rf ../app
           mkdir -p ../app
-          rm -rf ../app/*
           cp -r dist/. ../app/
+          test -f ../app/index.html
+          test -f ../app/.htaccess
+          ls -la ../app
+          ls -la ../app/assets
 
       - name: Deploy via rsync over SSH
         uses: easingthemes/ssh-deploy@v5.1.0
@@ -47,7 +52,7 @@ jobs:
           ARGS: "-rlgoDzvc"
           SOURCE: "./"
           TARGET: /home/u221026474/domains/superfinelabels.in/public_html/plots
-          EXCLUDE: "/.git/, /.github/, /frontend/node_modules/, /frontend/dist/, /frontend/src/, /_ci_tmp/, /ci3.zip, /tests/, /docs/, /application/logs/*, /application/cache/sessions/*, /uploads/projects/, /uploads/users/, /uploads/units/, /uploads/documents/, /application/config/database.php, /README.md"
+          EXCLUDE: "/.git/, /.github/, /frontend/, /_ci_tmp/, /ci3.zip, /tests/, /docs/, /application/logs/*, /application/cache/sessions/*, /uploads/projects/, /uploads/users/, /uploads/units/, /uploads/documents/, /application/config/database.php, /README.md, /license.txt"
           SCRIPT_AFTER: |
             cd /home/u221026474/domains/superfinelabels.in/public_html/plots
             if [ -f .htaccess ]; then
@@ -56,7 +61,10 @@ jobs:
             if [ -f application/config/config.php ]; then
               sed -i "s|\$config\['base_url'\] = '.*';|\$config['base_url'] = 'https://superfinelabels.in/plots/';|g" application/config/config.php || true
             fi
-            mkdir -p uploads/projects uploads/users uploads/units uploads/documents
+            mkdir -p app uploads/projects uploads/users uploads/units uploads/documents
             mkdir -p application/logs application/cache/sessions
             touch uploads/projects/index.html uploads/users/index.html uploads/units/index.html uploads/documents/index.html
-            chmod -R 775 uploads application/logs application/cache || true
+            chmod -R 775 uploads application/logs application/cache app || true
+            echo "API:  https://superfinelabels.in/plots/"
+            echo "APP:  https://superfinelabels.in/plots/app/"
+            ls -la app | head -20

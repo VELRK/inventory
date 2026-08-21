@@ -109,7 +109,7 @@ export default function Reports() {
         <div className="btn-row" style={{ marginTop: 14 }}>
           <button className="btn btn-outline" onClick={() => { setFilters({ company_id: '', project_id: '', status: '', from: '', to: '' }); }}>Reset</button>
           <button className="btn btn-gold" onClick={() => load(1)}>Apply Filters</button>
-          <a className="btn btn-outline" href={`/api/reports/export?${qs()}`} target="_blank" rel="noreferrer">Export CSV</a>
+          <a className="btn btn-outline" href={`/plots/index.php/api/reports/export?${qs()}`} target="_blank" rel="noreferrer">Export CSV</a>
         </div>
       </div>
       <div className="grid grid-4">

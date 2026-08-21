@@ -77,14 +77,33 @@ class Inventory extends Api_Controller
 				if ($label === '') {
 					$label = (string) $newStatus;
 				}
-				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . status_label($old) . ' to ' . $label, 'inventory_units', $id);
-				$this->mailer->dispatch_event('inventory.status', array(
+				$prevLabel = status_label($old);
+				$project = $this->db->get_where('projects', array('id' => $fresh->project_id))->row();
+				$projectName = $project ? $project->name : '';
+				$superName = $this->auth_user ? $this->auth_user->name : 'Super Admin';
+				$link = frontend_app_url('/inventory?project_id=' . (int) $fresh->project_id);
+				$ctx = array(
+					'projectName' => $projectName,
+					'siteNumber' => $fresh->unit_no,
 					'unit_no' => $fresh->unit_no,
+					'previousStatus' => $prevLabel,
+					'currentStatus' => $label,
 					'status' => $label,
 					'status_label' => $label,
+					'superAdminName' => $superName,
+					'updatedDate' => date('d M Y, h:i A'),
+					'link' => $link,
 					'project_id' => (int) $fresh->project_id,
 					'actor_user_id' => $this->user_id()
-				));
+				);
+				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . $prevLabel . ' to ' . $label, 'inventory_units', $id);
+				// Available: notify everyone with project access (all companies).
+				if ($newStatus === 'available' && $old !== 'available') {
+					$this->mailer->dispatch_event('inventory.available', $ctx);
+				} else {
+					// Other status changes → promoter admin (template recipients).
+					$this->mailer->dispatch_event('inventory.status', $ctx);
+				}
 			}
 			$this->api_response->ok($this->inventory_model->decorate($fresh), 'Unit updated.');
 		}

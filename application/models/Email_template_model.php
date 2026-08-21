@@ -20,18 +20,28 @@ class Email_template_model extends CI_Model
 				'hint' => 'All active promoter_admin accounts'
 			),
 			array(
+				'key' => 'project_company_users',
+				'label' => 'Requesting company · project access',
+				'hint' => 'Team admins + users of the requesting marketing company who can access this project'
+			),
+			array(
+				'key' => 'project_all_users',
+				'label' => 'All companies · project access',
+				'hint' => 'Every team admin/user (any company) who has access to this project'
+			),
+			array(
 				'key' => 'team_admin',
-				'label' => 'Company team admins',
-				'hint' => 'marketing_team_admin users in the related company'
+				'label' => 'Company team admins (no project filter)',
+				'hint' => 'All marketing_team_admin in the related company'
 			),
 			array(
 				'key' => 'team_user',
-				'label' => 'Company team users',
-				'hint' => 'marketing_team_user accounts in the related company'
+				'label' => 'Company team users (no project filter)',
+				'hint' => 'All marketing_team_user in the related company'
 			),
 			array(
 				'key' => 'company_all',
-				'label' => 'All company users',
+				'label' => 'All company users (no project filter)',
 				'hint' => 'Every active user in the related marketing company'
 			),
 			array(
@@ -56,10 +66,11 @@ class Email_template_model extends CI_Model
 			'auth.password_changed' => array('target_user' => true),
 			'user.created' => array('target_user' => true),
 			'request.submitted' => array('promoter_admin' => true),
-			'request.approved' => array('target_user' => true, 'team_admin' => true),
-			'request.rejected' => array('target_user' => true, 'team_admin' => true),
+			'request.approved' => array('project_company_users' => true),
+			'request.rejected' => array('project_company_users' => true),
+			'inventory.available' => array('project_all_users' => true),
 			'inventory.status' => array('promoter_admin' => true),
-			'booking.created' => array('promoter_admin' => true, 'company_email' => true, 'team_admin' => true),
+			'booking.created' => array('promoter_admin' => true, 'company_email' => true, 'project_company_users' => true),
 			'registration.created' => array('promoter_admin' => true),
 			'company.created' => array('promoter_admin' => true, 'company_email' => true),
 			'mail.test' => array('target_user' => true),
@@ -121,31 +132,38 @@ class Email_template_model extends CI_Model
 			),
 			array(
 				'event_key' => 'request.submitted',
-				'name' => 'Hold request submitted (admin)',
-				'subject' => 'New hold request · {unit_no}',
-				'body' => "Hello,\n\nA hold request was submitted.\n\nUnit: {unit_no}\nProject: {project}\nCompany: {company}\n\nPlease review it in the Inventory portal.",
-				'placeholders' => 'unit_no, project, company'
+				'name' => 'Block request → Super Admin',
+				'subject' => 'Action Required: New Plot Block Request – {projectName} / Plot {siteNumber}',
+				'body' => "A new plot block request has been submitted by {marketingAdminName} from {marketingCompanyName}.\n\nProject: {projectName}\nPlot / Site No.: {siteNumber}\nRequested By: {marketingAdminName}\nMarketing Company: {marketingCompanyName}\nRequested On: {requestDate}\n\nThe request is currently Pending Approval. Please review and Approve or Reject it from the Syncr admin portal.\n\nOpen requests: {link}",
+				'placeholders' => 'projectName, siteNumber, marketingAdminName, marketingCompanyName, requestDate, link'
 			),
 			array(
 				'event_key' => 'request.approved',
-				'name' => 'Hold request approved',
-				'subject' => 'Hold request approved · {unit_no}',
-				'body' => "Hello,\n\nYour hold request for unit {unit_no} was approved.\nYou can proceed to book the unit with the customer.",
-				'placeholders' => 'unit_no, notes'
+				'name' => 'Block approved → Requesting company',
+				'subject' => '{projectName} – Plot {siteNumber} Booked by Your Marketing Team',
+				'body' => "This is to inform you that Plot {siteNumber} in {projectName} has been booked by your marketing team, {marketingCompanyName}.\n\nProject: {projectName}\nPlot / Site No.: {siteNumber}\nMarketing Team: {marketingCompanyName}\nBooked By: {marketingUserName}\nBooking Date: {bookingDate}\n\nThe plot status has been updated to Booked / On Hold in the project inventory. Please consider this plot unavailable for further booking requests from your marketing team.\n\nView inventory: {link}",
+				'placeholders' => 'projectName, siteNumber, marketingCompanyName, marketingUserName, bookingDate, link'
 			),
 			array(
 				'event_key' => 'request.rejected',
-				'name' => 'Hold request rejected',
-				'subject' => 'Hold request rejected · {unit_no}',
-				'body' => "Hello,\n\nYour hold request for unit {unit_no} was rejected.\nNotes: {notes}",
-				'placeholders' => 'unit_no, notes'
+				'name' => 'Block rejected → Requesting company',
+				'subject' => 'Plot {siteNumber} Block Request Rejected – {projectName}',
+				'body' => "This is to inform you that the block request for Plot {siteNumber} in {projectName}, submitted by {marketingCompanyName}, has been rejected by the Super Admin.\n\nProject: {projectName}\nPlot / Site No.: {siteNumber}\nMarketing Company: {marketingCompanyName}\nRequested By: {marketingAdminName}\nReviewed By: {superAdminName}\nStatus: Rejected\nReason: {rejectionReason}\n\nThe plot remains available in the project inventory and can be requested again, subject to availability.\n\nView inventory: {link}",
+				'placeholders' => 'projectName, siteNumber, marketingCompanyName, marketingAdminName, superAdminName, rejectionReason, link'
+			),
+			array(
+				'event_key' => 'inventory.available',
+				'name' => 'Plot now Available → Project access users',
+				'subject' => 'Plot {siteNumber} Now Available – {projectName}',
+				'body' => "Please be informed that Plot {siteNumber} in {projectName} is now available.\n\nThe plot status has been updated to Available by the Super Admin and is now open for new enquiries, block requests, or bookings, subject to the project's availability rules.\n\nProject: {projectName}\nPlot / Site No.: {siteNumber}\nPrevious Status: {previousStatus}\nCurrent Status: Available\nUpdated By: {superAdminName}\nUpdated On: {updatedDate}\n\nView inventory: {link}",
+				'placeholders' => 'projectName, siteNumber, previousStatus, superAdminName, updatedDate, link'
 			),
 			array(
 				'event_key' => 'inventory.status',
-				'name' => 'Inventory status update',
-				'subject' => 'Unit {unit_no} is now {status}',
-				'body' => "Hello,\n\nInventory status was updated.\n\nUnit: {unit_no}\nNew status: {status}",
-				'placeholders' => 'unit_no, status'
+				'name' => 'Inventory status update (other)',
+				'subject' => 'Unit {siteNumber} is now {currentStatus} – {projectName}',
+				'body' => "Hello,\n\nInventory status was updated.\n\nProject: {projectName}\nUnit: {siteNumber}\nPrevious status: {previousStatus}\nNew status: {currentStatus}\nUpdated by: {superAdminName}\n\nView inventory: {link}",
+				'placeholders' => 'projectName, siteNumber, previousStatus, currentStatus, superAdminName, status, unit_no, link'
 			),
 			array(
 				'event_key' => 'booking.created',
@@ -210,24 +228,35 @@ class Email_template_model extends CI_Model
 	public function ensure_seeded()
 	{
 		$this->ensure_table();
+		// Syncr block/available notification copy + recipients — keep in sync with product rules.
+		$force_sync = array(
+			'request.submitted',
+			'request.approved',
+			'request.rejected',
+			'inventory.available',
+			'inventory.status'
+		);
 		foreach ($this->defaults() as $row) {
 			$exists = $this->db->get_where('email_templates', array('event_key' => $row['event_key']))->row();
 			if ($exists) {
 				$needsLink = in_array($row['event_key'], array('user.created', 'auth.forgot'), true)
 					&& (!$exists->body || strpos($exists->body, '{link}') === false);
-				$needsStatus = $row['event_key'] === 'inventory.status'
-					&& (!$exists->body || stripos($exists->body, '{status}') === false
-						|| !$exists->subject || stripos($exists->subject, '{status}') === false);
-				$needsRecipients = empty($exists->recipients);
+				$force = in_array($row['event_key'], $force_sync, true)
+					&& (!$exists->body || strpos($exists->body, '{projectName}') === false || strpos($exists->body, '{siteNumber}') === false);
+				$needsRecipients = empty($exists->recipients)
+					|| (in_array($row['event_key'], $force_sync, true)
+						&& $exists->recipients
+						&& strpos($exists->recipients, 'project_') === false
+						&& in_array($row['event_key'], array('request.approved', 'request.rejected', 'inventory.available'), true));
 				$patch = array('updated_at' => now_dt());
-				if ($needsLink || $needsStatus) {
+				if ($needsLink || $force) {
 					$patch['name'] = $row['name'];
 					$patch['subject'] = $row['subject'];
 					$patch['body'] = $row['body'];
 					$patch['placeholders'] = $row['placeholders'];
+					$patch['recipients'] = json_encode($row['recipients']);
 					$patch['is_active'] = 1;
-				}
-				if ($needsRecipients) {
+				} elseif ($needsRecipients) {
 					$patch['recipients'] = json_encode($row['recipients']);
 				}
 				if (count($patch) > 1) {

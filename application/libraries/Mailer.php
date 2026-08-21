@@ -92,24 +92,24 @@ class Mailer
 			if (is_array($value) || is_object($value)) {
 				continue;
 			}
-			$needle = '{' . $key . '}';
 			$repl = (string) $value;
-			$subject = str_ireplace($needle, $repl, $subject);
-			$tpl = str_ireplace($needle, $repl, $tpl);
+			$subject = str_ireplace(array('{{' . $key . '}}', '{' . $key . '}'), $repl, $subject);
+			$tpl = str_ireplace(array('{{' . $key . '}}', '{' . $key . '}'), $repl, $tpl);
 		}
 		if (!empty($context['link'])) {
 			$link = (string) $context['link'];
 			if (strpos($tpl, $link) === false) {
-				$tpl .= "\n\nSet / reset password link (valid " . (isset($context['expires']) ? $context['expires'] : '48 hours') . "):\n" . $link;
+				if (strpos($event, 'auth.') === 0 || $event === 'user.created') {
+					$tpl .= "\n\nSet / reset password link (valid " . (isset($context['expires']) ? $context['expires'] : '48 hours') . "):\n" . $link;
+				} else {
+					$tpl .= "\n\nOpen in Syncr:\n" . $link;
+				}
 			}
 		}
-		if ($event === 'inventory.status' && !empty($context['status'])) {
-			$statusText = (string) $context['status'];
-			if (stripos($subject, $statusText) === false) {
+		if (in_array($event, array('inventory.status', 'inventory.available'), true) && !empty($context['currentStatus'])) {
+			$statusText = (string) $context['currentStatus'];
+			if (stripos($subject, $statusText) === false && stripos($subject, 'Available') === false) {
 				$subject = rtrim($subject) . ' ' . $statusText;
-			}
-			if (stripos($tpl, $statusText) === false) {
-				$tpl = rtrim($tpl) . "\nNew status: " . $statusText;
 			}
 		}
 
@@ -171,6 +171,16 @@ class Mailer
 					$emails[] = $row->email;
 				}
 			}
+		}
+
+		// Requesting company admins+users who have access to this project.
+		if (!empty($recipients['project_company_users']) && $project_id && $company_id) {
+			$emails = array_merge($emails, $this->_project_access_emails($project_id, $company_id));
+		}
+
+		// All marketing admins/users (any company) with access to this project.
+		if (!empty($recipients['project_all_users']) && $project_id) {
+			$emails = array_merge($emails, $this->_project_access_emails($project_id, null));
 		}
 
 		$need_company_users = !empty($recipients['team_admin'])
@@ -243,6 +253,73 @@ class Mailer
 			}
 		}
 		return array_keys($clean);
+	}
+
+	/**
+	 * Marketing team admins/users who can access $project_id.
+	 * Optional $company_id limits to that marketing company only.
+	 */
+	private function _project_access_emails($project_id, $company_id = null)
+	{
+		$project_id = (int) $project_id;
+		if ($project_id <= 0) {
+			return array();
+		}
+		$this->CI->db->where_in('role', array('marketing_team_admin', 'marketing_team_user'))
+			->where('status', 'active')
+			->where('deleted_at IS NULL', null, false);
+		if ($company_id) {
+			$this->CI->db->where('company_id', (int) $company_id);
+		} else {
+			$this->CI->db->where('company_id IS NOT NULL', null, false);
+		}
+		$users = $this->CI->db->get('users')->result();
+		$out = array();
+		foreach ($users as $user) {
+			if ($this->_user_can_access_project($user, $project_id) && !empty($user->email)) {
+				$out[] = $user->email;
+			}
+		}
+		return $out;
+	}
+
+	/** Mirror Api_Controller::allowed_project_ids for a given user row. */
+	private function _user_can_access_project($user, $project_id)
+	{
+		$project_id = (int) $project_id;
+		$uid = (int) $user->id;
+		$cid = !empty($user->company_id) ? (int) $user->company_id : 0;
+
+		$personal = array();
+		$rows = $this->CI->db->select('project_id')
+			->from('user_project_assignments')
+			->where('user_id', $uid)
+			->get()->result();
+		foreach ($rows as $row) {
+			$personal[] = (int) $row->project_id;
+		}
+
+		$company = array();
+		if ($cid) {
+			$rows = $this->CI->db->select('project_id')
+				->from('company_project_assignments')
+				->where('company_id', $cid)
+				->get()->result();
+			foreach ($rows as $row) {
+				$company[] = (int) $row->project_id;
+			}
+		}
+
+		if ($user->role === 'marketing_team_admin') {
+			$allowed = array_values(array_unique(array_merge($company, $personal)));
+			return in_array($project_id, $allowed, true);
+		}
+
+		// Team user: personal assignments win; else company pool.
+		if (!empty($personal)) {
+			return in_array($project_id, $personal, true);
+		}
+		return in_array($project_id, $company, true);
 	}
 
 	private function _split_emails($value)

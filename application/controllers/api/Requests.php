@@ -69,17 +69,28 @@ class Requests extends Api_Controller
 			$admins = $this->db->where('role', 'promoter_admin')->where('status', 'active')->get('users')->result();
 			$company = $this->db->get_where('marketing_companies', array('id' => $this->company_id()))->row();
 			$project = $this->db->get_where('projects', array('id' => $unit->project_id))->row();
+			$requester = $this->auth_user;
+			$projectName = $project ? $project->name : '';
+			$siteNumber = $unit->unit_no;
+			$companyName = $company ? $company->name : '';
+			$adminName = $requester ? $requester->name : '';
 			$this->mailer->dispatch_event('request.submitted', array(
-				'unit_no' => $unit->unit_no,
-				'project' => $project ? $project->name : '',
-				'company' => $company ? $company->name : '',
+				'projectName' => $projectName,
+				'siteNumber' => $siteNumber,
+				'unit_no' => $siteNumber,
+				'project' => $projectName,
+				'company' => $companyName,
+				'marketingAdminName' => $adminName,
+				'marketingCompanyName' => $companyName,
+				'requestDate' => date('d M Y, h:i A'),
+				'link' => frontend_app_url('/requests'),
 				'company_id' => $this->company_id(),
 				'project_id' => (int) $unit->project_id,
 				'target_user_id' => $this->user_id(),
 				'actor_user_id' => $this->user_id()
 			));
 			foreach ($admins as $admin) {
-				$this->notify($admin->id, 'New block request', $unit->unit_no . ' requested by ' . ($company ? $company->name : 'team'));
+				$this->notify($admin->id, 'New block request', $siteNumber . ' requested by ' . ($companyName !== '' ? $companyName : 'team'));
 			}
 			$this->log_activity('request.create', 'Block request submitted for ' . $unit->unit_no, 'block_requests', $id);
 			$this->api_response->ok($this->request_model->decorate($this->request_model->find($id)), 'Block request submitted.', 201);
@@ -169,18 +180,56 @@ class Requests extends Api_Controller
 			}
 		}
 		$requester = $this->user_model->find($row->requested_by);
+		$company = $this->db->get_where('marketing_companies', array('id' => (int) $row->company_id))->row();
+		$project = $unit ? $this->db->get_where('projects', array('id' => $unit->project_id))->row() : null;
+		$projectName = $project ? $project->name : '';
+		$siteNumber = $unit ? $unit->unit_no : '';
+		$companyName = $company ? $company->name : '';
+		$requesterName = $requester ? $requester->name : '';
+		$superName = $this->auth_user ? $this->auth_user->name : 'Super Admin';
+		$notes = trim((string) request_value('review_notes'));
+		if ($notes === '') {
+			$notes = 'No reason provided';
+		}
+		$event = $decision === 'approved' ? 'request.approved' : 'request.rejected';
+		$ctx = array(
+			'projectName' => $projectName,
+			'siteNumber' => $siteNumber,
+			'unit_no' => $siteNumber,
+			'marketingCompanyName' => $companyName,
+			'marketingAdminName' => $requesterName,
+			'marketingUserName' => $requesterName,
+			'bookingDate' => date('d M Y, h:i A'),
+			'superAdminName' => $superName,
+			'rejectionReason' => $notes,
+			'notes' => $notes,
+			'link' => frontend_app_url($unit ? '/inventory?project_id=' . (int) $unit->project_id : '/inventory'),
+			'company_id' => (int) $row->company_id,
+			'project_id' => $unit ? (int) $unit->project_id : 0,
+			'target_user_id' => $requester ? (int) $requester->id : 0,
+			'target_email' => $requester ? $requester->email : null,
+			'actor_user_id' => $this->user_id()
+		);
+		$this->mailer->dispatch_event($event, $ctx);
 		if ($requester) {
-			$event = $decision === 'approved' ? 'request.approved' : 'request.rejected';
-			$this->mailer->dispatch_event($event, array(
-				'unit_no' => $unit ? $unit->unit_no : '',
-				'notes' => (string) request_value('review_notes'),
-				'target_email' => $requester->email,
-				'target_user_id' => (int) $requester->id,
+			$this->notify($requester->id, 'Block request ' . $decision, 'Unit ' . $siteNumber . ' was ' . $decision);
+		}
+		// When reject restores Available, also notify all companies with project access.
+		if ($decision === 'rejected' && $unit) {
+			$this->mailer->dispatch_event('inventory.available', array(
+				'projectName' => $projectName,
+				'siteNumber' => $siteNumber,
+				'unit_no' => $siteNumber,
+				'previousStatus' => 'On Hold',
+				'currentStatus' => 'Available',
+				'status' => 'Available',
+				'superAdminName' => $superName,
+				'updatedDate' => date('d M Y, h:i A'),
+				'link' => frontend_app_url('/inventory?project_id=' . (int) $unit->project_id),
+				'project_id' => (int) $unit->project_id,
 				'company_id' => (int) $row->company_id,
-				'project_id' => $unit ? (int) $unit->project_id : 0,
 				'actor_user_id' => $this->user_id()
 			));
-			$this->notify($requester->id, 'Block request ' . $decision, 'Unit ' . ($unit ? $unit->unit_no : '') . ' was ' . $decision);
 		}
 		$this->log_activity('request.review', 'Request #' . $id . ' ' . $decision, 'block_requests', $id);
 		$this->api_response->ok($this->request_model->decorate($this->request_model->find($id)), 'Request ' . $decision . '.');

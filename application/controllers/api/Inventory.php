@@ -27,12 +27,15 @@ class Inventory extends Api_Controller
 		if ($method === 'POST') {
 			$this->require_permission('inventory.create');
 			$data = $this->_payload(null);
-			// New units cannot be created as booked/registered — use Bookings / Registrations.
-			if (in_array($data['status'], array('booked', 'registered'), true)) {
-				$data['status'] = 'available';
-			}
 			if ($data['unit_no'] === '' || !$data['project_id']) {
 				$this->api_response->validation(array('unit_no' => 'Unit number is required.', 'project_id' => 'Project is required.'));
+			}
+			$status = $data['status'];
+			$name = trim((string) request_value('customer_name'));
+			if (in_array($status, array('booked', 'registered'), true) && $name === '') {
+				$this->api_response->validation(array(
+					'customer_name' => 'Customer name is required when status is ' . $status . '.'
+				));
 			}
 			$exists = $this->db->get_where('inventory_units', array('project_id' => $data['project_id'], 'unit_no' => $data['unit_no'], 'deleted_at' => null))->row();
 			if ($exists) {
@@ -40,8 +43,60 @@ class Inventory extends Api_Controller
 			}
 			$data['created_at'] = now_dt();
 			$this->db->insert('inventory_units', $data);
-			$id = $this->db->insert_id();
-			$this->log_activity('inventory.create', 'Created unit ' . $data['unit_no'], 'inventory_units', $id);
+			$id = (int) $this->db->insert_id();
+			if ($id < 1) {
+				$this->api_response->error('DB_ERROR', 'Failed to create unit.', 500);
+			}
+			$company_id = request_value('company_id');
+			if ($this->is_team_admin()) {
+				$company_id = $this->company_id();
+			}
+			if ($status === 'booked' || $status === 'registered') {
+				$this->db->insert('bookings', array(
+					'unit_id' => $id,
+					'project_id' => $data['project_id'],
+					'company_id' => $company_id ?: null,
+					'customer_name' => $name,
+					'customer_phone' => request_value('customer_phone'),
+					'customer_email' => request_value('customer_email'),
+					'amount' => (float) request_value('amount', $data['price']),
+					'booking_date' => request_value('booking_date', date('Y-m-d')),
+					'status' => 'confirmed',
+					'payment_status' => request_value('payment_status', $status === 'registered' ? 'paid' : 'partial'),
+					'notes' => request_value('notes', $data['remarks']),
+					'created_by' => $this->user_id(),
+					'created_at' => now_dt()
+				));
+				if ($this->db->affected_rows() < 1) {
+					$this->api_response->error('DB_ERROR', 'Unit created but booking was not stored.', 500);
+				}
+			}
+			if ($status === 'registered') {
+				$booking = $this->db->where('unit_id', $id)
+					->where('deleted_at IS NULL', null, false)
+					->order_by('id', 'DESC')
+					->get('bookings')->row();
+				$this->db->insert('registrations', array(
+					'unit_id' => $id,
+					'project_id' => $data['project_id'],
+					'company_id' => $company_id ?: null,
+					'booking_id' => $booking ? $booking->id : null,
+					'customer_name' => $name,
+					'customer_phone' => request_value('customer_phone'),
+					'customer_email' => request_value('customer_email'),
+					'amount' => (float) request_value('amount', $data['price']),
+					'registration_date' => request_value('registration_date', date('Y-m-d')),
+					'status' => 'confirmed',
+					'payment_status' => request_value('payment_status', 'paid'),
+					'notes' => request_value('notes', $data['remarks']),
+					'created_by' => $this->user_id(),
+					'created_at' => now_dt()
+				));
+				if ($this->db->affected_rows() < 1) {
+					$this->api_response->error('DB_ERROR', 'Unit created but registration was not stored.', 500);
+				}
+			}
+			$this->log_activity('inventory.create', 'Created unit ' . $data['unit_no'] . ' as ' . $status, 'inventory_units', $id);
 			$this->api_response->ok($this->inventory_model->decorate($this->inventory_model->find($id)), 'Unit created.', 201);
 		}
 		$this->api_response->error('METHOD_NOT_ALLOWED', 'Unsupported method.', 405);

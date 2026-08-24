@@ -4,7 +4,11 @@ import { api, can, fmt, getUser } from '../api';
 import { Badge, Field, Modal, Pager, RowActions, confirmDelete } from '../components/ui';
 
 const statuses = ['', 'available', 'on_hold', 'booked', 'registered'];
-const blankUnit = { project_id: '', unit_no: '', block_phase: '', plot_type: 'Residential Plot', area_sqft: 1200, facing: 'East', road_width_ft: 30, dimensions: '30x40', price: 3600000, status: 'available', remarks: '' };
+const blankUnit = {
+  project_id: '', unit_no: '', block_phase: '', plot_type: 'Residential Plot', area_sqft: 1200, facing: 'East',
+  road_width_ft: 30, dimensions: '30x40', price: 3600000, status: 'available', remarks: '',
+  customer_name: '', customer_phone: '', customer_email: '', company_id: '',
+};
 const blankBook = {
   customer_name: '', customer_phone: '', customer_email: '', company_id: '',
   amount: '', booking_date: new Date().toISOString().slice(0, 10), status: 'confirmed', payment_status: 'partial', notes: '',
@@ -55,7 +59,7 @@ export default function Inventory() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ ...blankUnit, project_id: projectId });
+    setForm({ ...blankUnit, project_id: projectId, company_id: me?.company_id || '' });
     setOpen(true);
   }
   function openEdit(u) {
@@ -222,38 +226,34 @@ export default function Inventory() {
               <Field label="Facing"><input className="input" value={form.facing} onChange={(e) => setForm({ ...form, facing: e.target.value })} /></Field>
               <Field label="Road width"><input className="input" value={form.road_width_ft} onChange={(e) => setForm({ ...form, road_width_ft: e.target.value })} /></Field>
             </div>
-            {editing && (
+            <Field label="Status">
+              <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                <option value="available">available</option>
+                <option value="on_hold">on hold</option>
+                <option value="booked">booked</option>
+                <option value="registered">registered</option>
+              </select>
+            </Field>
+            {(form.status === 'booked' || form.status === 'registered') && (!editing || form.status !== editing.status) && (
               <>
-                <Field label="Status">
-                  <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="available">available</option>
-                    <option value="on_hold">on hold</option>
-                    <option value="booked">booked</option>
-                    <option value="registered">registered</option>
-                  </select>
+                <Field label="Customer name">
+                  <input className="input" required value={form.customer_name || ''} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
                 </Field>
-                {(form.status === 'booked' || form.status === 'registered') && form.status !== editing.status && (
-                  <>
-                    <Field label="Customer name">
-                      <input className="input" required value={form.customer_name || ''} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-                    </Field>
-                    <div className="grid grid-2">
-                      <Field label="Phone"><input className="input" value={form.customer_phone || ''} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></Field>
-                      <Field label="Email"><input className="input" value={form.customer_email || ''} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} /></Field>
-                    </div>
-                    {can('companies.manage', me) && (
-                      <Field label="Company">
-                        <select className="select" value={form.company_id || ''} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
-                          <option value="">None</option>
-                          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      </Field>
-                    )}
-                    <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-                      Saves a {form.status === 'booked' ? 'booking' : 'registration'} record for this unit.
-                    </p>
-                  </>
+                <div className="grid grid-2">
+                  <Field label="Phone"><input className="input" value={form.customer_phone || ''} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></Field>
+                  <Field label="Email"><input className="input" value={form.customer_email || ''} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} /></Field>
+                </div>
+                {can('companies.manage', me) && (
+                  <Field label="Company">
+                    <select className="select" value={form.company_id || ''} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
+                      <option value="">None</option>
+                      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </Field>
                 )}
+                <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                  Saves a {form.status === 'booked' ? 'booking' : 'registration'} record for this unit.
+                </p>
               </>
             )}
             <Field label="Remarks"><textarea className="textarea" rows={2} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></Field>

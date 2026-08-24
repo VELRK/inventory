@@ -6,13 +6,14 @@ class Projects extends Api_Controller
 	public function __construct()
 	{
 		parent::__construct();
-		$this->load->model('project_model');
+		$this->load->model(array('project_model', 'inventory_model'));
 	}
 
 	public function index()
 	{
 		$method = $this->http_method();
 		if ($method === 'GET') {
+			$this->inventory_model->sync_status_from_transactions();
 			list($page, $limit, $offset) = pagination_params(12);
 			$filters = array(
 				'q' => request_value('q'),

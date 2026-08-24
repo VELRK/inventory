@@ -13,6 +13,7 @@ class Inventory extends Api_Controller
 	{
 		$method = $this->http_method();
 		if ($method === 'GET') {
+			$this->inventory_model->sync_status_from_transactions();
 			list($page, $limit, $offset) = pagination_params(12);
 			$filters = array(
 				'q' => request_value('q'),
@@ -26,6 +27,10 @@ class Inventory extends Api_Controller
 		if ($method === 'POST') {
 			$this->require_permission('inventory.create');
 			$data = $this->_payload(null);
+			// New units cannot be created as booked/registered — use Bookings / Registrations.
+			if (in_array($data['status'], array('booked', 'registered'), true)) {
+				$data['status'] = 'available';
+			}
 			if ($data['unit_no'] === '' || !$data['project_id']) {
 				$this->api_response->validation(array('unit_no' => 'Unit number is required.', 'project_id' => 'Project is required.'));
 			}
@@ -67,6 +72,16 @@ class Inventory extends Api_Controller
 				if ($allowed !== null && !in_array($new_project, $allowed, true)) {
 					$this->api_response->error('FORBIDDEN', 'You cannot move this unit to an unassigned project.', 403);
 				}
+			}
+			// Booked/Registered must be created via /bookings and /registrations so rows are stored.
+			if ($data['status'] !== $old && in_array($data['status'], array('booked', 'registered'), true)) {
+				$this->api_response->error(
+					'USE_BOOKING_FLOW',
+					$data['status'] === 'booked'
+						? 'To mark a unit booked, create a booking (Inventory → Book unit or Bookings page).'
+						: 'To mark a unit registered, create a registration on the Bookings page (Registrations tab).',
+					422
+				);
 			}
 			$data['updated_at'] = now_dt();
 			$this->db->where('id', (int) $id)->update('inventory_units', $data);
@@ -120,6 +135,7 @@ class Inventory extends Api_Controller
 	{
 		$project_id = request_value('project_id');
 		$allowed = $this->allowed_project_ids();
+		$this->inventory_model->sync_status_from_transactions();
 		$global = $this->inventory_model->stats($allowed, $project_id);
 
 		$this->db->select('p.id, p.name, p.city');
@@ -158,6 +174,13 @@ class Inventory extends Api_Controller
 			$status = normalize_unit_status($status);
 			if ($status === null) {
 				$this->api_response->validation(array('status' => 'Status must be available, on_hold, booked, or registered.'));
+			}
+			if (in_array($status, array('booked', 'registered'), true)) {
+				$this->api_response->error(
+					'USE_BOOKING_FLOW',
+					'Bulk status cannot set booked/registered. Create bookings or registrations instead.',
+					422
+				);
 			}
 		}
 		$project_scope = $this->allowed_project_ids();

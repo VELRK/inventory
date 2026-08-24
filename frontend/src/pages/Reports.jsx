@@ -33,15 +33,21 @@ export default function Reports() {
   };
   useEffect(() => {
     api('/reports/filters').then((r) => setOpts(r.data)).catch(() => {});
-    api('/inventory?limit=100&status=available').then((r) => setUnits(r.data.items || [])).catch(() => {});
-    api('/inventory?limit=100&status=on_hold').then((r) => {
-      setUnits((prev) => {
-        const map = {};
-        [...prev, ...(r.data.items || [])].forEach((u) => { map[u.id] = u; });
-        return Object.values(map);
-      });
-    }).catch(() => {});
   }, []);
+  useEffect(() => {
+    const statusForUnits = type === 'registrations' ? 'booked' : 'available';
+    const extra = type === 'bookings' ? 'on_hold' : null;
+    api(`/inventory?limit=100&status=${statusForUnits}`).then((r) => setUnits(r.data.items || [])).catch(() => setUnits([]));
+    if (extra) {
+      api(`/inventory?limit=100&status=${extra}`).then((r) => {
+        setUnits((prev) => {
+          const map = {};
+          [...prev, ...(r.data.items || [])].forEach((u) => { map[u.id] = u; });
+          return Object.values(map);
+        });
+      }).catch(() => {});
+    }
+  }, [type]);
   useEffect(() => {
     if (!admin && type === 'registrations') setType('bookings');
     else load(1);
@@ -77,10 +83,19 @@ export default function Reports() {
 
   async function save(e) {
     e.preventDefault();
+    if (!editing && !form.unit_id) {
+      setErr('Select a unit.');
+      return;
+    }
+    if (!form.customer_name?.trim()) {
+      setErr('Customer name is required.');
+      return;
+    }
     try {
       if (editing) await api(`${endpoint}/${editing.id}`, { method: 'PUT', body: form });
       else await api(endpoint, { method: 'POST', body: form });
       setOpen(false);
+      setErr('');
       load(editing ? data.page : 1);
     } catch (ex) { setErr(ex.message); }
   }

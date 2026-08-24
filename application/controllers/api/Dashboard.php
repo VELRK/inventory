@@ -12,6 +12,7 @@ class Dashboard extends Api_Controller
 	public function index()
 	{
 		$allowed = $this->allowed_project_ids();
+		$this->inventory_model->sync_status_from_transactions();
 		$projects = $this->project_model->list_filtered(array(), 5, 0, $allowed);
 		$stats = $this->inventory_model->stats($allowed);
 		$project_count = $allowed === null
@@ -37,31 +38,38 @@ class Dashboard extends Api_Controller
 	public function charts()
 	{
 		$allowed = $this->allowed_project_ids();
+		$this->inventory_model->sync_status_from_transactions();
 		$status = $this->inventory_model->stats($allowed);
 
-		$this->db->select('p.name, u.status, COUNT(*) as cnt', false)
-			->from('inventory_units u')
-			->join('projects p', 'p.id = u.project_id')
-			->where('u.deleted_at IS NULL', null, false);
-		if ($allowed !== null) {
-			if (empty($allowed)) {
-				$this->api_response->ok(array('status_pie' => array(), 'project_breakdown' => array(), 'monthly' => array()));
-			}
-			$this->db->where_in('u.project_id', $allowed);
-		}
-		$rows = $this->db->group_by(array('p.name', 'u.status'))->get()->result();
-		$breakdown = array();
-		foreach ($rows as $row) {
-			if (!isset($breakdown[$row->name])) {
-				$breakdown[$row->name] = array('name' => $row->name, 'available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0);
-			}
-			$breakdown[$row->name][$row->status] = (int) $row->cnt;
+		if ($allowed !== null && empty($allowed)) {
+			$this->api_response->ok(array('status_pie' => array(), 'project_breakdown' => array(), 'monthly' => array()));
 		}
 
-		$monthly = $this->db->query("
-			SELECT DATE_FORMAT(booking_date, '%Y-%m') as ym, COUNT(*) as bookings, COALESCE(SUM(amount),0) as value
-			FROM bookings WHERE deleted_at IS NULL GROUP BY ym ORDER BY ym DESC LIMIT 6
-		")->result();
+		$this->db->select('id, name')->from('projects')->where('deleted_at IS NULL', null, false);
+		if ($allowed !== null) {
+			$this->db->where_in('id', $allowed);
+		}
+		$projects = $this->db->order_by('name', 'ASC')->get()->result();
+		$breakdown = array();
+		foreach ($projects as $p) {
+			$s = $this->inventory_model->stats(null, $p->id);
+			$breakdown[] = array(
+				'name' => $p->name,
+				'available' => $s['available'],
+				'on_hold' => $s['on_hold'],
+				'booked' => $s['booked'],
+				'registered' => $s['registered']
+			);
+		}
+
+		$this->db->select("DATE_FORMAT(booking_date, '%Y-%m') as ym, COUNT(*) as bookings, COALESCE(SUM(amount),0) as value", false)
+			->from('bookings')
+			->where('deleted_at IS NULL', null, false)
+			->where('status <>', 'cancelled');
+		if ($allowed !== null) {
+			$this->db->where_in('project_id', $allowed);
+		}
+		$monthly = $this->db->group_by('ym')->order_by('ym', 'DESC')->limit(6)->get()->result();
 
 		$this->api_response->ok(array(
 			'status_pie' => array(
@@ -70,7 +78,7 @@ class Dashboard extends Api_Controller
 				array('name' => 'Booked', 'value' => $status['booked']),
 				array('name' => 'Registered', 'value' => $status['registered'])
 			),
-			'project_breakdown' => array_values($breakdown),
+			'project_breakdown' => $breakdown,
 			'monthly' => array_reverse($monthly)
 		));
 	}

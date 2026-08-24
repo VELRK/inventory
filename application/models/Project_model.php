@@ -15,17 +15,12 @@ class Project_model extends CI_Model
 		if (!$project) {
 			return null;
 		}
-		$stats = $this->db->select('status, COUNT(*) as cnt', false)
-			->from('inventory_units')
-			->where('project_id', $project->id)
-			->where('deleted_at IS NULL', null, false)
-			->group_by('status')
-			->get()->result();
-		$counts = array('available' => 0, 'on_hold' => 0, 'booked' => 0, 'registered' => 0, 'total' => 0);
-		foreach ($stats as $s) {
-			$counts[$s->status] = (int) $s->cnt;
-			$counts['total'] += (int) $s->cnt;
+		$ci =& get_instance();
+		if (empty($ci->inventory_model)) {
+			$ci->load->model('inventory_model');
 		}
+		// booked/registered come from bookings & registrations tables (same as dashboard).
+		$counts = $ci->inventory_model->stats(null, $project->id);
 		$images = $this->db->get_where('project_images', array('project_id' => $project->id))->result();
 		return array(
 			'id' => (int) $project->id,

@@ -9,6 +9,10 @@ const blankBook = {
   customer_name: '', customer_phone: '', customer_email: '', company_id: '',
   amount: '', booking_date: new Date().toISOString().slice(0, 10), status: 'confirmed', payment_status: 'partial', notes: '',
 };
+const blankReg = {
+  customer_name: '', customer_phone: '', customer_email: '', company_id: '',
+  amount: '', registration_date: new Date().toISOString().slice(0, 10), status: 'confirmed', payment_status: 'paid', notes: '',
+};
 
 export default function Inventory() {
   const me = getUser();
@@ -16,6 +20,7 @@ export default function Inventory() {
   const canEdit = can('inventory.edit', me);
   const canDelete = can('inventory.delete', me);
   const canBook = can('bookings.manage', me);
+  const canRegister = can('registrations.manage', me);
   const [params, setParams] = useSearchParams();
   const projectId = params.get('project_id') || '';
   const [projects, setProjects] = useState([]);
@@ -29,10 +34,12 @@ export default function Inventory() {
   const [detail, setDetail] = useState(null);
   const [reqOpen, setReqOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
+  const [regOpen, setRegOpen] = useState(false);
   const [bulk, setBulk] = useState([]);
   const [form, setForm] = useState({ ...blankUnit, project_id: projectId });
   const [req, setReq] = useState({ customer_name: '', customer_phone: '', customer_email: '', expected_booking_date: '', remarks: '' });
   const [book, setBook] = useState({ ...blankBook });
+  const [reg, setReg] = useState({ ...blankReg });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -106,7 +113,25 @@ export default function Inventory() {
       });
       setBookOpen(false);
       setDetail(null);
-      setMsg('Booking created.');
+      setMsg('Booking saved to bookings table.');
+      load();
+    } catch (ex) { setErr(ex.message); }
+  }
+  async function submitReg(e) {
+    e.preventDefault();
+    try {
+      await api('/registrations', {
+        method: 'POST',
+        body: {
+          ...reg,
+          unit_id: detail.id,
+          amount: reg.amount || detail.price,
+          company_id: reg.company_id || me?.company_id || '',
+        },
+      });
+      setRegOpen(false);
+      setDetail(null);
+      setMsg('Registration saved to registrations table.');
       load();
     } catch (ex) { setErr(ex.message); }
   }
@@ -119,6 +144,7 @@ export default function Inventory() {
 
   const stats = data.stats || {};
   const bookable = detail && (detail.status === 'available' || detail.status === 'on_hold');
+  const registerable = detail && detail.status === 'booked';
 
   return (
     <div>
@@ -194,9 +220,17 @@ export default function Inventory() {
             </div>
             {editing && (
               <Field label="Status">
-                <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {statuses.filter(Boolean).map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                </select>
+                {editing.status === 'booked' || editing.status === 'registered' ? (
+                  <>
+                    <input className="input" value={editing.status.replace('_', ' ')} disabled />
+                    <span className="muted" style={{ fontSize: 12 }}>Use Bookings / Registrations pages to change this — editing status here does not create records.</span>
+                  </>
+                ) : (
+                  <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    <option value="available">available</option>
+                    <option value="on_hold">on hold</option>
+                  </select>
+                )}
               </Field>
             )}
             <Field label="Remarks"><textarea className="textarea" rows={2} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></Field>
@@ -223,6 +257,12 @@ export default function Inventory() {
                 setBook({ ...blankBook, amount: detail.price, company_id: me?.company_id || '' });
                 setBookOpen(true);
               }}>Book unit</button>
+            )}
+            {canRegister && registerable && (
+              <button className="btn btn-gold" onClick={() => {
+                setReg({ ...blankReg, amount: detail.price, company_id: me?.company_id || '' });
+                setRegOpen(true);
+              }}>Register unit</button>
             )}
             {!canEdit && detail.status === 'available' && (
               <button className="btn btn-outline" onClick={() => setReqOpen(true)}>Request hold</button>
@@ -264,6 +304,31 @@ export default function Inventory() {
             )}
             <Field label="Notes"><textarea className="textarea" rows={2} value={book.notes} onChange={(e) => setBook({ ...book, notes: e.target.value })} /></Field>
             <button className="btn btn-gold">Confirm booking</button>
+          </form>
+        </Modal>
+      )}
+      {regOpen && detail && (
+        <Modal title={`Register ${detail.unit_no}`} onClose={() => setRegOpen(false)}>
+          <form onSubmit={submitReg} className="grid">
+            <Field label="Customer name"><input className="input" required value={reg.customer_name} onChange={(e) => setReg({ ...reg, customer_name: e.target.value })} /></Field>
+            <div className="grid grid-2">
+              <Field label="Phone"><input className="input" value={reg.customer_phone} onChange={(e) => setReg({ ...reg, customer_phone: e.target.value })} /></Field>
+              <Field label="Email"><input className="input" value={reg.customer_email} onChange={(e) => setReg({ ...reg, customer_email: e.target.value })} /></Field>
+            </div>
+            <div className="grid grid-2">
+              <Field label="Amount"><input className="input" type="number" value={reg.amount} onChange={(e) => setReg({ ...reg, amount: e.target.value })} /></Field>
+              <Field label="Registration date"><input className="input" type="date" value={reg.registration_date} onChange={(e) => setReg({ ...reg, registration_date: e.target.value })} /></Field>
+            </div>
+            {can('companies.manage', me) && (
+              <Field label="Company">
+                <select className="select" value={reg.company_id} onChange={(e) => setReg({ ...reg, company_id: e.target.value })}>
+                  <option value="">None</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Notes"><textarea className="textarea" rows={2} value={reg.notes} onChange={(e) => setReg({ ...reg, notes: e.target.value })} /></Field>
+            <button className="btn btn-gold">Confirm registration</button>
           </form>
         </Modal>
       )}

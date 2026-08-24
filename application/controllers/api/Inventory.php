@@ -73,20 +73,114 @@ class Inventory extends Api_Controller
 					$this->api_response->error('FORBIDDEN', 'You cannot move this unit to an unassigned project.', 403);
 				}
 			}
-			// Booked/Registered must be created via /bookings and /registrations so rows are stored.
-			if ($data['status'] !== $old && in_array($data['status'], array('booked', 'registered'), true)) {
-				$this->api_response->error(
-					'USE_BOOKING_FLOW',
-					$data['status'] === 'booked'
-						? 'To mark a unit booked, create a booking (Inventory → Book unit or Bookings page).'
-						: 'To mark a unit registered, create a registration on the Bookings page (Registrations tab).',
-					422
-				);
+			$newStatus = $data['status'];
+			// Changing to booked/registered must store a row in bookings/registrations.
+			if ($newStatus !== $old && in_array($newStatus, array('booked', 'registered'), true)) {
+				$name = trim((string) request_value('customer_name'));
+				if ($name === '') {
+					$this->api_response->validation(array(
+						'customer_name' => 'Customer name is required when status is ' . $newStatus . '.'
+					));
+				}
+				if ($newStatus === 'booked') {
+					if (!in_array($old, array('available', 'on_hold', 'booked'), true)) {
+						$this->api_response->error('UNIT_NOT_BOOKABLE', 'Only available or on-hold units can be booked.', 409);
+					}
+					$company_id = request_value('company_id');
+					if ($this->is_team_admin()) {
+						$company_id = $this->company_id();
+					}
+					$this->db->insert('bookings', array(
+						'unit_id' => (int) $id,
+						'project_id' => $unit->project_id,
+						'company_id' => $company_id ?: null,
+						'customer_name' => $name,
+						'customer_phone' => request_value('customer_phone'),
+						'customer_email' => request_value('customer_email'),
+						'amount' => (float) request_value('amount', $data['price']),
+						'booking_date' => request_value('booking_date', date('Y-m-d')),
+						'status' => 'confirmed',
+						'payment_status' => request_value('payment_status', 'partial'),
+						'notes' => request_value('notes', $data['remarks']),
+						'created_by' => $this->user_id(),
+						'created_at' => now_dt()
+					));
+					if ($this->db->affected_rows() < 1) {
+						$this->api_response->error('DB_ERROR', 'Failed to save booking for this unit.', 500);
+					}
+				}
+				if ($newStatus === 'registered') {
+					if (!in_array($old, array('booked', 'registered', 'available', 'on_hold'), true)) {
+						$this->api_response->error('UNIT_NOT_REGISTERABLE', 'Cannot register this unit.', 409);
+					}
+					// Ensure a booking exists when jumping straight to registered.
+					if ($old !== 'booked' && $old !== 'registered') {
+						$company_id = request_value('company_id');
+						if ($this->is_team_admin()) {
+							$company_id = $this->company_id();
+						}
+						$this->db->insert('bookings', array(
+							'unit_id' => (int) $id,
+							'project_id' => $unit->project_id,
+							'company_id' => $company_id ?: null,
+							'customer_name' => $name,
+							'customer_phone' => request_value('customer_phone'),
+							'customer_email' => request_value('customer_email'),
+							'amount' => (float) request_value('amount', $data['price']),
+							'booking_date' => request_value('booking_date', date('Y-m-d')),
+							'status' => 'confirmed',
+							'payment_status' => request_value('payment_status', 'paid'),
+							'notes' => request_value('notes', $data['remarks']),
+							'created_by' => $this->user_id(),
+							'created_at' => now_dt()
+						));
+					}
+					$booking = $this->db->where('unit_id', (int) $id)
+						->where('deleted_at IS NULL', null, false)
+						->where('status <>', 'cancelled')
+						->order_by('id', 'DESC')
+						->get('bookings')->row();
+					$company_id = request_value('company_id');
+					if ($this->is_team_admin()) {
+						$company_id = $this->company_id();
+					}
+					$this->db->insert('registrations', array(
+						'unit_id' => (int) $id,
+						'project_id' => $unit->project_id,
+						'company_id' => $company_id ?: null,
+						'booking_id' => $booking ? $booking->id : null,
+						'customer_name' => $name,
+						'customer_phone' => request_value('customer_phone'),
+						'customer_email' => request_value('customer_email'),
+						'amount' => (float) request_value('amount', $data['price']),
+						'registration_date' => request_value('registration_date', date('Y-m-d')),
+						'status' => 'confirmed',
+						'payment_status' => request_value('payment_status', 'paid'),
+						'notes' => request_value('notes', $data['remarks']),
+						'created_by' => $this->user_id(),
+						'created_at' => now_dt()
+					));
+					if ($this->db->affected_rows() < 1) {
+						$this->api_response->error('DB_ERROR', 'Failed to save registration for this unit.', 500);
+					}
+				}
+			}
+			// Moving back to available/on_hold: cancel active booking/registration rows so counts stay correct.
+			if ($newStatus !== $old && in_array($newStatus, array('available', 'on_hold'), true)
+				&& in_array($old, array('booked', 'registered'), true)) {
+				$now = now_dt();
+				$this->db->where('unit_id', (int) $id)
+					->where('deleted_at IS NULL', null, false)
+					->where('status <>', 'cancelled')
+					->update('registrations', array('status' => 'cancelled', 'updated_at' => $now));
+				$this->db->where('unit_id', (int) $id)
+					->where('deleted_at IS NULL', null, false)
+					->where('status <>', 'cancelled')
+					->update('bookings', array('status' => 'cancelled', 'updated_at' => $now));
 			}
 			$data['updated_at'] = now_dt();
 			$this->db->where('id', (int) $id)->update('inventory_units', $data);
 			$fresh = $this->inventory_model->find($id);
-			$newStatus = $data['status'];
 			if ($old !== $newStatus) {
 				$label = status_label($newStatus);
 				if ($label === '') {
@@ -112,11 +206,9 @@ class Inventory extends Api_Controller
 					'actor_user_id' => $this->user_id()
 				);
 				$this->log_activity('inventory.status', $fresh->unit_no . ' status changed from ' . $prevLabel . ' to ' . $label, 'inventory_units', $id);
-				// Available: notify everyone with project access (all companies).
 				if ($newStatus === 'available' && $old !== 'available') {
 					$this->inventory_model->notify_available($fresh, $old);
 				} else {
-					// Other status changes → promoter admin (template recipients).
 					$this->mailer->dispatch_event('inventory.status', $ctx);
 				}
 			}

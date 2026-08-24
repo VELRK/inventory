@@ -72,6 +72,10 @@ export default function Inventory() {
       price: u.price,
       status: u.status,
       remarks: u.remarks || '',
+      customer_name: '',
+      customer_phone: '',
+      customer_email: '',
+      company_id: me?.company_id || '',
     });
     setOpen(true);
   }
@@ -219,19 +223,38 @@ export default function Inventory() {
               <Field label="Road width"><input className="input" value={form.road_width_ft} onChange={(e) => setForm({ ...form, road_width_ft: e.target.value })} /></Field>
             </div>
             {editing && (
-              <Field label="Status">
-                {editing.status === 'booked' || editing.status === 'registered' ? (
-                  <>
-                    <input className="input" value={editing.status.replace('_', ' ')} disabled />
-                    <span className="muted" style={{ fontSize: 12 }}>Use Bookings / Registrations pages to change this — editing status here does not create records.</span>
-                  </>
-                ) : (
+              <>
+                <Field label="Status">
                   <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                     <option value="available">available</option>
                     <option value="on_hold">on hold</option>
+                    <option value="booked">booked</option>
+                    <option value="registered">registered</option>
                   </select>
+                </Field>
+                {(form.status === 'booked' || form.status === 'registered') && form.status !== editing.status && (
+                  <>
+                    <Field label="Customer name">
+                      <input className="input" required value={form.customer_name || ''} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+                    </Field>
+                    <div className="grid grid-2">
+                      <Field label="Phone"><input className="input" value={form.customer_phone || ''} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></Field>
+                      <Field label="Email"><input className="input" value={form.customer_email || ''} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} /></Field>
+                    </div>
+                    {can('companies.manage', me) && (
+                      <Field label="Company">
+                        <select className="select" value={form.company_id || ''} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
+                          <option value="">None</option>
+                          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </Field>
+                    )}
+                    <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                      Saves a {form.status === 'booked' ? 'booking' : 'registration'} record for this unit.
+                    </p>
+                  </>
                 )}
-              </Field>
+              </>
             )}
             <Field label="Remarks"><textarea className="textarea" rows={2} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></Field>
             <button className="btn btn-gold">{editing ? 'Update Unit' : 'Save Unit'}</button>

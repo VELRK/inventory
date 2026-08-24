@@ -29,11 +29,16 @@ class Requests extends Api_Controller
 			$this->api_response->paginated($items, $total, $page, $limit);
 		}
 		if ($method === 'POST') {
-			$unit_id = (int) request_value('unit_id');
-			$unit = $this->inventory_model->find($unit_id);
-			if (!$unit) {
-				$this->api_response->error('NOT_FOUND', 'Unit not found.', 404);
+			$ref = request_value('unit_id', request_value('unit_no'));
+			$project_id = request_value('project_id');
+			$unit = $this->inventory_model->find_by_ref($ref, $project_id);
+			if ($unit === false) {
+				$this->api_response->error('AMBIGUOUS_UNIT', 'Multiple units match that unit_no. Pass project_id as well.', 409);
 			}
+			if (!$unit) {
+				$this->api_response->error('NOT_FOUND', 'Unit not found. Use numeric unit_id from GET /inventory, or unit_no with optional project_id.', 404);
+			}
+			$unit_id = (int) $unit->id;
 			$allowed = $this->allowed_project_ids();
 			if ($allowed !== null && !in_array((int) $unit->project_id, $allowed, true)) {
 				$this->api_response->error('FORBIDDEN', 'This unit is not assigned to you.', 403);

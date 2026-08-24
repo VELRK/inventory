@@ -23,11 +23,16 @@ class Bookings extends Api_Controller
 		}
 		if ($method === 'POST') {
 			$this->require_permission('bookings.manage');
-			$unit_id = (int) request_value('unit_id');
-			$unit = $this->inventory_model->find($unit_id);
-			if (!$unit) {
-				$this->api_response->error('NOT_FOUND', 'Unit not found.', 404);
+			$ref = request_value('unit_id', request_value('unit_no'));
+			$project_id = request_value('project_id');
+			$unit = $this->inventory_model->find_by_ref($ref, $project_id);
+			if ($unit === false) {
+				$this->api_response->error('AMBIGUOUS_UNIT', 'Multiple units match that unit_no. Pass project_id as well.', 409);
 			}
+			if (!$unit) {
+				$this->api_response->error('NOT_FOUND', 'Unit not found. Use numeric unit_id from GET /inventory, or unit_no (e.g. F282) with optional project_id.', 404);
+			}
+			$unit_id = (int) $unit->id;
 			if (!in_array($unit->status, array('available', 'on_hold'), true)) {
 				$this->api_response->error('UNIT_NOT_BOOKABLE', 'Only available or on-hold units can be booked.', 409);
 			}

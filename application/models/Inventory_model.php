@@ -10,6 +10,38 @@ class Inventory_model extends CI_Model
 			->get('inventory_units')->row();
 	}
 
+	/**
+	 * Resolve unit by numeric id, or by unit_no / plot code (e.g. F282).
+	 * Optional project_id when looking up by unit_no (recommended if codes repeat across projects).
+	 */
+	public function find_by_ref($ref, $project_id = null)
+	{
+		$ref = trim((string) $ref);
+		if ($ref === '') {
+			return null;
+		}
+		if (ctype_digit($ref)) {
+			$unit = $this->find((int) $ref);
+			if ($unit) {
+				return $unit;
+			}
+		}
+		$this->db->from('inventory_units')
+			->where('deleted_at IS NULL', null, false)
+			->where('unit_no', $ref);
+		if ($project_id) {
+			$this->db->where('project_id', (int) $project_id);
+		}
+		$rows = $this->db->limit(2)->get()->result();
+		if (count($rows) === 1) {
+			return $rows[0];
+		}
+		if (count($rows) > 1) {
+			return false; // ambiguous — caller should pass project_id
+		}
+		return null;
+	}
+
 	public function decorate($unit)
 	{
 		if (!$unit) {
